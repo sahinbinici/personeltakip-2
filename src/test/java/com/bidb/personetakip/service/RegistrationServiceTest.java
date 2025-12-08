@@ -37,6 +37,15 @@ class RegistrationServiceTest {
     private ExternalPersonnelRepository externalPersonnelRepository;
     
     @Mock
+    private com.bidb.personetakip.repository.external.ExternalTelephoneRepository externalTelephoneRepository;
+    
+    @Mock
+    private com.bidb.personetakip.repository.external.ExternalDepartmentRepository externalDepartmentRepository;
+    
+    @Mock
+    private com.bidb.personetakip.repository.external.ExternalTitleRepository externalTitleRepository;
+    
+    @Mock
     private UserRepository userRepository;
     
     @Mock
@@ -78,10 +87,10 @@ class RegistrationServiceTest {
         
         // Assert
         assertNotNull(result);
-        assertEquals(testPersonnel.getEsicno(), result.personnelNo());
-        assertEquals(testPersonnel.getTckiml(), result.tcNo());
-        assertEquals(testPersonnel.getPeradi(), result.firstName());
-        assertEquals(testPersonnel.getSoyadi(), result.lastName());
+        assertEquals(testPersonnel.getPersonnelNo(), result.personnelNo());
+        assertEquals(testPersonnel.getTcNo(), result.tcNo());
+        assertEquals(testPersonnel.getFirstName(), result.firstName());
+        assertEquals(testPersonnel.getLastName(), result.lastName());
         
         verify(externalPersonnelRepository).findByTcNoAndPersonnelNo(testTcNo, testPersonnelNo);
     }

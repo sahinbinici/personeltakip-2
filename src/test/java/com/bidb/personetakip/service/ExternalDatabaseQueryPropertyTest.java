@@ -39,6 +39,12 @@ public class ExternalDatabaseQueryPropertyTest {
     private com.bidb.personetakip.repository.external.ExternalTelephoneRepository externalTelephoneRepository;
     
     @Mock
+    private com.bidb.personetakip.repository.external.ExternalDepartmentRepository externalDepartmentRepository;
+    
+    @Mock
+    private com.bidb.personetakip.repository.external.ExternalTitleRepository externalTitleRepository;
+    
+    @Mock
     private com.bidb.personetakip.repository.UserRepository userRepository;
     
     @Mock
@@ -58,6 +64,8 @@ public class ExternalDatabaseQueryPropertyTest {
         registrationService = new RegistrationServiceImpl(
             externalPersonnelRepository,
             externalTelephoneRepository,
+            externalDepartmentRepository,
+            externalTitleRepository,
             userRepository,
             otpVerificationRepository,
             smsService,

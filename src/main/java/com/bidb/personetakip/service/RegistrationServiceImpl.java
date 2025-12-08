@@ -12,6 +12,10 @@ import com.bidb.personetakip.repository.OtpVerificationRepository;
 import com.bidb.personetakip.repository.UserRepository;
 import com.bidb.personetakip.repository.external.ExternalPersonnelRepository;
 import com.bidb.personetakip.repository.external.ExternalTelephoneRepository;
+import com.bidb.personetakip.repository.external.ExternalDepartmentRepository;
+import com.bidb.personetakip.repository.external.ExternalTitleRepository;
+import com.bidb.personetakip.model.ExternalDepartment;
+import com.bidb.personetakip.model.ExternalTitle;
 import com.bidb.personetakip.util.PasswordValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +35,8 @@ public class RegistrationServiceImpl implements RegistrationService {
     
     private final ExternalPersonnelRepository externalPersonnelRepository;
     private final ExternalTelephoneRepository externalTelephoneRepository;
+    private final ExternalDepartmentRepository externalDepartmentRepository;
+    private final ExternalTitleRepository externalTitleRepository;
     private final UserRepository userRepository;
     private final OtpVerificationRepository otpVerificationRepository;
     private final SmsService smsService;
@@ -64,12 +70,47 @@ public class RegistrationServiceImpl implements RegistrationService {
                     log.info("Mobile phone found for personnel: {}", mobilePhone);
                 } else {
                     log.warn("No mobile phone found for personnel with esicno: {}", personnel.getEsicno());
-                    // Use a default or throw exception based on requirements
                     mobilePhone = "0000000000"; // Placeholder
                 }
             } catch (Exception e) {
                 log.error("Error fetching telephone for personnel", e);
                 mobilePhone = "0000000000"; // Placeholder on error
+            }
+            
+            // Get department information from brkodu table
+            String departmentCode = personnel.getBrkodu();
+            String departmentName = null;
+            try {
+                if (departmentCode != null) {
+                    ExternalDepartment department = externalDepartmentRepository
+                        .findByBrkodu(departmentCode)
+                        .orElse(null);
+                    
+                    if (department != null) {
+                        departmentName = department.getBrkdac();
+                        log.info("Department found: {} - {}", departmentCode, departmentName);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Error fetching department for personnel", e);
+            }
+            
+            // Get title information from unvkod table
+            String titleCode = personnel.getUnvkod();
+            String titleName = null;
+            try {
+                if (titleCode != null) {
+                    ExternalTitle title = externalTitleRepository
+                        .findByUnvkod(titleCode)
+                        .orElse(null);
+                    
+                    if (title != null) {
+                        titleName = title.getUnvack();
+                        log.info("Title found: {} - {}", titleCode, titleName);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Error fetching title for personnel", e);
             }
             
             return new ExternalPersonnelDto(
@@ -78,7 +119,11 @@ public class RegistrationServiceImpl implements RegistrationService {
                 personnel.getPersonnelNo(),
                 personnel.getFirstName(),
                 personnel.getLastName(),
-                mobilePhone
+                mobilePhone,
+                departmentCode,
+                departmentName,
+                titleCode,
+                titleName
             );
         } catch (PersonnelNotFoundException e) {
             throw e;

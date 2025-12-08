@@ -9,5 +9,9 @@ public record ExternalPersonnelDto(
     String personnelNo,
     String firstName,
     String lastName,
-    String mobilePhone
+    String mobilePhone,
+    String departmentCode,
+    String departmentName,
+    String titleCode,
+    String titleName
 ) {}

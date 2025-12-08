@@ -34,7 +34,11 @@ public class ExternalPersonnelDataPropertyTest {
             personnel.getPersonnelNo(),
             personnel.getFirstName(),
             personnel.getLastName(),
-            personnel.getMobilePhone()
+            personnel.getMobilePhone(),
+            personnel.getBrkodu(),
+            "Department Name", // Would be fetched from brkodu table
+            personnel.getUnvkod(),
+            "Title Name" // Would be fetched from unvkod table
         );
         
         // Verify all required fields are present and match
@@ -52,5 +56,7 @@ public class ExternalPersonnelDataPropertyTest {
         assertEquals("First Name should match", personnel.getFirstName(), result.firstName());
         assertEquals("Last Name should match", personnel.getLastName(), result.lastName());
         assertEquals("Mobile Phone should match", personnel.getMobilePhone(), result.mobilePhone());
+        assertEquals("Department Code should match", personnel.getBrkodu(), result.departmentCode());
+        assertEquals("Title Code should match", personnel.getUnvkod(), result.titleCode());
     }
 }
