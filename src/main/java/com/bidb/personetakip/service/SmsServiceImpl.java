@@ -1,26 +1,25 @@
 package com.bidb.personetakip.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Implementation of SMS service with external gateway integration.
+ * Implementation of SMS service with VatanSMS API integration.
  * Includes retry and circuit breaker patterns for resilience.
+ * 
+ * VatanSMS API: https://api.vatansms.net/api/v1/otp
  */
 @Service
 public class SmsServiceImpl implements SmsService {
@@ -28,26 +27,29 @@ public class SmsServiceImpl implements SmsService {
     private static final Logger logger = LoggerFactory.getLogger(SmsServiceImpl.class);
     private static final SecureRandom random = new SecureRandom();
     
-    @Value("${sms.gateway.url}")
+    @Value("${sms.gateway.url:https://api.vatansms.net/api/v1/otp}")
     private String smsGatewayUrl;
     
-    @Value("${sms.gateway.api-key}")
+    @Value("${sms.gateway.api-id:29d463733f56db81be9eb355}")
+    private String apiId;
+    
+    @Value("${sms.gateway.api-key:79259ea325e14e8603ab7cf7}")
     private String apiKey;
     
-    @Value("${sms.gateway.sender}")
+    @Value("${sms.gateway.sender:G.ANTEP UNI}")
     private String senderId;
     
-    @Value("${otp.length}")
+    @Value("${otp.length:6}")
     private int otpLength;
     
-    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
     
     public SmsServiceImpl() {
-        this.restTemplate = new RestTemplate();
+        this.objectMapper = new ObjectMapper();
     }
     
     /**
-     * Sends SMS with retry and circuit breaker protection.
+     * Sends SMS with retry and circuit breaker protection using VatanSMS API.
      * Retries up to 3 times with exponential backoff.
      * Circuit breaker opens after 50% failure rate.
      */
@@ -55,34 +57,43 @@ public class SmsServiceImpl implements SmsService {
     @Retry(name = "smsGateway", fallbackMethod = "sendSmsFallback")
     @CircuitBreaker(name = "smsGateway", fallbackMethod = "sendSmsFallback")
     public void sendSms(String phoneNumber, String message) {
-        logger.debug("Attempting to send SMS to: {}", phoneNumber);
+        logger.debug("Attempting to send SMS to: {} via VatanSMS", phoneNumber);
         
         try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("X-API-Key", apiKey);
+            URL url = new URL(smsGatewayUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
             
-            Map<String, String> requestBody = new HashMap<>();
-            requestBody.put("to", phoneNumber);
-            requestBody.put("message", message);
-            requestBody.put("sender", senderId);
+            // Prepare request body according to VatanSMS API format
+            Map<String, Object> params = new HashMap<>();
+            params.put("api_id", apiId);
+            params.put("api_key", apiKey);
+            params.put("sender", senderId);
+            params.put("message_type", "normal");
+            params.put("message", message);
+            params.put("phones", new String[]{phoneNumber});
             
-            HttpEntity<Map<String, String>> request = new HttpEntity<>(requestBody, headers);
+            String jsonInputString = objectMapper.writeValueAsString(params);
             
-            ResponseEntity<String> response = restTemplate.exchange(
-                smsGatewayUrl,
-                HttpMethod.POST,
-                request,
-                String.class
-            );
-            
-            if (response.getStatusCode().is2xxSuccessful()) {
-                logger.info("SMS sent successfully to: {}", phoneNumber);
-            } else {
-                throw new SmsServiceException("SMS gateway returned non-success status: " + response.getStatusCode());
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = jsonInputString.getBytes("utf-8");
+                os.write(input, 0, input.length);
             }
             
-        } catch (RestClientException e) {
+            int responseCode = conn.getResponseCode();
+            String responseMessage = conn.getResponseMessage();
+            
+            logger.info("VatanSMS Response Code: {}, Message: {}", responseCode, responseMessage);
+            
+            if (responseCode >= 200 && responseCode < 300) {
+                logger.info("SMS sent successfully to: {}", phoneNumber);
+            } else {
+                throw new SmsServiceException("SMS gateway returned non-success status: " + responseCode + " - " + responseMessage);
+            }
+            
+        } catch (Exception e) {
             logger.error("Failed to send SMS to {}: {}", phoneNumber, e.getMessage());
             throw new SmsServiceException("Failed to send SMS", e);
         }
