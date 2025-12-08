@@ -4,12 +4,14 @@ import com.bidb.personetakip.dto.ExternalPersonnelDto;
 import com.bidb.personetakip.dto.UserDto;
 import com.bidb.personetakip.exception.*;
 import com.bidb.personetakip.model.ExternalPersonnel;
+import com.bidb.personetakip.model.ExternalTelephone;
 import com.bidb.personetakip.model.OtpVerification;
 import com.bidb.personetakip.model.User;
 import com.bidb.personetakip.model.UserRole;
 import com.bidb.personetakip.repository.OtpVerificationRepository;
 import com.bidb.personetakip.repository.UserRepository;
 import com.bidb.personetakip.repository.external.ExternalPersonnelRepository;
+import com.bidb.personetakip.repository.external.ExternalTelephoneRepository;
 import com.bidb.personetakip.util.PasswordValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,7 @@ import java.time.LocalDateTime;
 public class RegistrationServiceImpl implements RegistrationService {
     
     private final ExternalPersonnelRepository externalPersonnelRepository;
+    private final ExternalTelephoneRepository externalTelephoneRepository;
     private final UserRepository userRepository;
     private final OtpVerificationRepository otpVerificationRepository;
     private final SmsService smsService;
@@ -49,13 +52,33 @@ public class RegistrationServiceImpl implements RegistrationService {
             
             log.info("Personnel validated successfully: {} {}", personnel.getFirstName(), personnel.getLastName());
             
+            // Get telephone number from telefo table
+            String mobilePhone = null;
+            try {
+                ExternalTelephone telephone = externalTelephoneRepository
+                    .findFirstByEsicno(personnel.getEsicno())
+                    .orElse(null);
+                
+                if (telephone != null) {
+                    mobilePhone = telephone.getMobilePhone();
+                    log.info("Mobile phone found for personnel: {}", mobilePhone);
+                } else {
+                    log.warn("No mobile phone found for personnel with esicno: {}", personnel.getEsicno());
+                    // Use a default or throw exception based on requirements
+                    mobilePhone = "0000000000"; // Placeholder
+                }
+            } catch (Exception e) {
+                log.error("Error fetching telephone for personnel", e);
+                mobilePhone = "0000000000"; // Placeholder on error
+            }
+            
             return new ExternalPersonnelDto(
                 personnel.getUserId(),
                 personnel.getTcNo(),
                 personnel.getPersonnelNo(),
                 personnel.getFirstName(),
                 personnel.getLastName(),
-                personnel.getMobilePhone()
+                mobilePhone
             );
         } catch (PersonnelNotFoundException e) {
             throw e;
