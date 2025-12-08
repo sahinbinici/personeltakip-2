@@ -1,0 +1,20 @@
+# Sample Environment Variables File
+# Copy this file to .env in the project root and update with your actual values
+
+# Local Database Configuration
+DB_USERNAME=root
+DB_PASSWORD=sahinbey_
+
+# External Database Configuration (optional)
+EXTERNAL_DB_USERNAME=hesapi
+EXTERNAL_DB_PASSWORD=TuruncuManTiS2025!!
+EXTERNAL_DB_HOST=193.140.136.145
+EXTERNAL_DB_NAME=isicil
+
+# JWT Configuration (use a strong secret in production)
+JWT_SECRET=pLBfVYnOY+tyygibae7oVhbIN6GxHBbAsf6ak70dDdo=
+
+# SMS Gateway Configuration (if needed)
+SMS_GATEWAY_URL=https://api.vatansms.net/api/v1/otp
+SMS_GATEWAY_API_KEY=your_sms_api_key
+SMS_SENDER_ID=G.ANTEP UNI
