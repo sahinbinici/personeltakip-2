@@ -40,6 +40,18 @@ public class PrimaryDataSourceConfig {
     @Value("${spring.jpa.hibernate.ddl-auto:validate}")
     private String ddlAuto;
     
+    @Value("${spring.datasource.url}")
+    private String jdbcUrl;
+    
+    @Value("${spring.datasource.username}")
+    private String username;
+    
+    @Value("${spring.datasource.password}")
+    private String password;
+    
+    @Value("${spring.datasource.driver-class-name}")
+    private String driverClassName;
+    
     /**
      * Primary datasource bean
      */
@@ -47,7 +59,12 @@ public class PrimaryDataSourceConfig {
     @Bean(name = "dataSource")
     @ConfigurationProperties(prefix = "spring.datasource")
     public DataSource dataSource() {
-        return DataSourceBuilder.create().build();
+        return DataSourceBuilder.create()
+                .url(jdbcUrl)
+                .username(username)
+                .password(password)
+                .driverClassName(driverClassName)
+                .build();
     }
     
     /**
@@ -70,7 +87,7 @@ public class PrimaryDataSourceConfig {
         
         Map<String, Object> properties = new HashMap<>();
         properties.put("hibernate.hbm2ddl.auto", ddlAuto);
-        properties.put("hibernate.dialect", "org.hibernate.dialect.H2Dialect");
+        properties.put("hibernate.dialect", "org.hibernate.dialect.MySQLDialect");
         properties.put("hibernate.format_sql", "true");
         properties.put("hibernate.use_sql_comments", "true");
         properties.put("hibernate.jdbc.batch_size", "20");

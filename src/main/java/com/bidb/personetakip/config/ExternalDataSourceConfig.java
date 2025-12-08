@@ -35,6 +35,18 @@ public class ExternalDataSourceConfig {
     @Value("${external.jpa.hibernate.ddl-auto:none}")
     private String ddlAuto;
     
+    @Value("${external.datasource.url}")
+    private String jdbcUrl;
+    
+    @Value("${external.datasource.username}")
+    private String username;
+    
+    @Value("${external.datasource.password}")
+    private String password;
+    
+    @Value("${external.datasource.driver-class-name}")
+    private String driverClassName;
+    
     /**
      * External datasource bean (read-only)
      * This datasource is configured with read-only credentials and should only be used
@@ -43,7 +55,12 @@ public class ExternalDataSourceConfig {
     @Bean(name = "externalDataSource")
     @ConfigurationProperties(prefix = "external.datasource")
     public DataSource externalDataSource() {
-        return DataSourceBuilder.create().build();
+        return DataSourceBuilder.create()
+                .url(jdbcUrl)
+                .username(username)
+                .password(password)
+                .driverClassName(driverClassName)
+                .build();
     }
     
     /**
@@ -66,7 +83,7 @@ public class ExternalDataSourceConfig {
         Map<String, Object> properties = new HashMap<>();
         // Use create-drop for tests, none for production
         properties.put("hibernate.hbm2ddl.auto", ddlAuto);
-        properties.put("hibernate.dialect", "org.hibernate.dialect.H2Dialect");
+        properties.put("hibernate.dialect", "org.hibernate.dialect.MySQLDialect");
         properties.put("hibernate.jdbc.time_zone", "UTC");
         // Read-only connection
         properties.put("hibernate.connection.isolation", "2");

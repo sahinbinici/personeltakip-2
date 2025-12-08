@@ -55,7 +55,7 @@ public class EntryExitRecord {
     /**
      * GPS latitude coordinate (-90 to 90 degrees)
      */
-    @Column(name = "latitude")
+    @Column(name = "latitude", columnDefinition = "DECIMAL(10, 8)")
     @DecimalMin(value = "-90.0", message = "Latitude must be between -90 and 90 degrees")
     @DecimalMax(value = "90.0", message = "Latitude must be between -90 and 90 degrees")
     private Double latitude;
@@ -63,7 +63,7 @@ public class EntryExitRecord {
     /**
      * GPS longitude coordinate (-180 to 180 degrees)
      */
-    @Column(name = "longitude")
+    @Column(name = "longitude", columnDefinition = "DECIMAL(11, 8)")
     @DecimalMin(value = "-180.0", message = "Longitude must be between -180 and 180 degrees")
     @DecimalMax(value = "180.0", message = "Longitude must be between -180 and 180 degrees")
     private Double longitude;
