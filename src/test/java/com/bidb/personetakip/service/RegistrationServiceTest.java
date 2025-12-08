@@ -58,12 +58,12 @@ class RegistrationServiceTest {
     @BeforeEach
     void setUp() {
         testPersonnel = ExternalPersonnel.builder()
-            .userId(1L)
-            .tcNo(testTcNo)
-            .personnelNo(testPersonnelNo)
-            .firstName("Ahmet")
-            .lastName("Yılmaz")
-            .mobilePhone("05551234567")
+            .esicno(12345L)
+            .tckiml(testTcNo)
+            .peradi("Ahmet")
+            .soyadi("Yılmaz")
+            .brkodu("BRK001")
+            .unvkod("UNV001")
             .build();
     }
     
@@ -78,12 +78,10 @@ class RegistrationServiceTest {
         
         // Assert
         assertNotNull(result);
-        assertEquals(testPersonnel.getUserId(), result.userId());
-        assertEquals(testPersonnel.getTcNo(), result.tcNo());
-        assertEquals(testPersonnel.getPersonnelNo(), result.personnelNo());
-        assertEquals(testPersonnel.getFirstName(), result.firstName());
-        assertEquals(testPersonnel.getLastName(), result.lastName());
-        assertEquals(testPersonnel.getMobilePhone(), result.mobilePhone());
+        assertEquals(testPersonnel.getEsicno(), result.personnelNo());
+        assertEquals(testPersonnel.getTckiml(), result.tcNo());
+        assertEquals(testPersonnel.getPeradi(), result.firstName());
+        assertEquals(testPersonnel.getSoyadi(), result.lastName());
         
         verify(externalPersonnelRepository).findByTcNoAndPersonnelNo(testTcNo, testPersonnelNo);
     }

@@ -41,12 +41,12 @@ public class ExternalPersonnelGenerator extends Generator<ExternalPersonnel> {
         String mobilePhone = "05" + String.format("%09d", random.nextLong(0, 999999999));
         
         return ExternalPersonnel.builder()
-            .userId(userId)
-            .tcNo(tcNo)
-            .personnelNo(personnelNo)
-            .firstName(firstName)
-            .lastName(lastName)
-            .mobilePhone(mobilePhone)
+            .esicno(userId)
+            .tckiml(tcNo)
+            .peradi(firstName)
+            .soyadi(lastName)
+            .brkodu("BRK" + random.nextInt(1, 100))
+            .unvkod("UNV" + random.nextInt(1, 100))
             .build();
     }
     

@@ -36,6 +36,15 @@ public class ExternalDatabaseQueryPropertyTest {
     private ExternalPersonnelRepository externalPersonnelRepository;
     
     @Mock
+    private com.bidb.personetakip.repository.external.ExternalTelephoneRepository externalTelephoneRepository;
+    
+    @Mock
+    private com.bidb.personetakip.repository.UserRepository userRepository;
+    
+    @Mock
+    private com.bidb.personetakip.repository.OtpVerificationRepository otpVerificationRepository;
+    
+    @Mock
     private SmsService smsService;
     
     @Mock
@@ -48,8 +57,9 @@ public class ExternalDatabaseQueryPropertyTest {
         MockitoAnnotations.openMocks(this);
         registrationService = new RegistrationServiceImpl(
             externalPersonnelRepository,
-            null, // userRepository not needed for this test
-            null, // otpVerificationRepository not needed for this test
+            externalTelephoneRepository,
+            userRepository,
+            otpVerificationRepository,
             smsService,
             passwordEncoder
         );
@@ -62,12 +72,12 @@ public class ExternalDatabaseQueryPropertyTest {
     ) {
         // Create a mock personnel object to return
         ExternalPersonnel mockPersonnel = ExternalPersonnel.builder()
-            .userId(12345L)
-            .tcNo(tcNo)
-            .personnelNo(personnelNo)
-            .firstName("Test")
-            .lastName("User")
-            .mobilePhone("05551234567")
+            .esicno(12345L)
+            .tckiml(tcNo)
+            .peradi("Test")
+            .soyadi("User")
+            .brkodu("BRK001")
+            .unvkod("UNV001")
             .build();
         
         // Configure mock to return the personnel when queried with both parameters
@@ -113,12 +123,12 @@ public class ExternalDatabaseQueryPropertyTest {
     ) {
         // Create a mock personnel object
         ExternalPersonnel mockPersonnel = ExternalPersonnel.builder()
-            .userId(12345L)
-            .tcNo(tcNo)
-            .personnelNo(personnelNo)
-            .firstName("Test")
-            .lastName("User")
-            .mobilePhone("05551234567")
+            .esicno(12345L)
+            .tckiml(tcNo)
+            .peradi("Test")
+            .soyadi("User")
+            .brkodu("BRK001")
+            .unvkod("UNV001")
             .build();
         
         // Configure mock to return the personnel
@@ -145,12 +155,12 @@ public class ExternalDatabaseQueryPropertyTest {
     ) {
         // Create a mock personnel object
         ExternalPersonnel mockPersonnel = ExternalPersonnel.builder()
-            .userId(12345L)
-            .tcNo(tcNo)
-            .personnelNo(personnelNo)
-            .firstName("Test")
-            .lastName("User")
-            .mobilePhone("05551234567")
+            .esicno(12345L)
+            .tckiml(tcNo)
+            .peradi("Test")
+            .soyadi("User")
+            .brkodu("BRK001")
+            .unvkod("UNV001")
             .build();
         
         // Configure mock to return the personnel
