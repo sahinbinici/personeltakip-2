@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Kod - Personnel Tracking System</title>
+    <link rel="stylesheet" th:href="@{/css/qrcode.css}">
+</head>
+<body>
+    <div class="container">
+        <div class="qrcode-card">
+            <div class="header">
+                <h1>Günlük QR Kod</h1>
+                <p class="subtitle">Daily QR Code</p>
+                <button id="logoutBtn" class="btn-logout">Çıkış Yap</button>
+            </div>
+
+            <div class="user-info" id="userInfo">
+                <p><strong>Hoş geldiniz,</strong> <span id="userName"></span></p>
+                <p class="user-tc">TC: <span id="userTc"></span></p>
+            </div>
+
+            <div class="qrcode-container" id="qrcodeContainer">
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>QR kod yükleniyor...</p>
+                </div>
+
+                <div class="qrcode-content" id="qrcodeContent" style="display: none;">
+                    <div class="qrcode-image-wrapper">
+                        <img id="qrcodeImage" alt="QR Code" class="qrcode-image">
+                    </div>
+
+                    <div class="qrcode-info">
+                        <div class="info-row">
+                            <span class="info-label">Geçerlilik Tarihi:</span>
+                            <span class="info-value" id="validDate"></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Kullanım Sayısı:</span>
+                            <span class="info-value">
+                                <span id="usageCount">0</span> / <span id="maxUsage">2</span>
+                            </span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Durum:</span>
+                            <span class="info-value status" id="status">Aktif</span>
+                        </div>
+                    </div>
+
+                    <div class="usage-indicator">
+                        <div class="usage-bar">
+                            <div class="usage-bar-fill" id="usageBarFill"></div>
+                        </div>
+                        <p class="usage-text" id="usageText">Giriş ve çıkış için kullanılabilir</p>
+                    </div>
+
+                    <button id="refreshBtn" class="btn btn-secondary">
+                        <span class="btn-text">Yenile</span>
+                        <span class="spinner-small" style="display: none;"></span>
+                    </button>
+                </div>
+
+                <div class="error-container" id="errorContainer" style="display: none;">
+                    <div class="error-icon">⚠️</div>
+                    <p class="error-message" id="errorMessage"></p>
+                    <button id="retryBtn" class="btn btn-primary">Tekrar Dene</button>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <h3>Kullanım Bilgisi</h3>
+                <ul>
+                    <li>QR kod her gün otomatik olarak yenilenir</li>
+                    <li>Her QR kod günde en fazla 2 kez kullanılabilir (1 giriş, 1 çıkış)</li>
+                    <li>Gece yarısında yeni QR kod oluşturulur</li>
+                    <li>QR kodu mobil uygulamada okutarak giriş/çıkış kaydı yapabilirsiniz</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/js/qrcode.js}"></script>
+</body>
+</html>

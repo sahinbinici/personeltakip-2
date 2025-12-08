@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giriş Yap - Personnel Tracking System</title>
+    <link rel="stylesheet" th:href="@{/css/login.css}">
+</head>
+<body>
+    <div class="container">
+        <div class="login-card">
+            <h1>Personel Takip Sistemi</h1>
+            <p class="subtitle">Personnel Tracking System</p>
+
+            <div class="form-container">
+                <h2>Giriş Yap</h2>
+                
+                <form id="loginForm" novalidate>
+                    <div class="form-group">
+                        <label for="tcNo">TC Kimlik No:</label>
+                        <input 
+                            type="text" 
+                            id="tcNo" 
+                            name="tcNo" 
+                            maxlength="11" 
+                            pattern="[0-9]{11}"
+                            required
+                            placeholder="11 haneli TC Kimlik No"
+                            autocomplete="username"
+                        >
+                        <span class="error-message" id="tcNoError"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Şifre:</label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required
+                            placeholder="Şifrenizi giriniz"
+                            autocomplete="current-password"
+                        >
+                        <span class="error-message" id="passwordError"></span>
+                    </div>
+
+                    <div class="alert alert-error" id="loginError" style="display: none;"></div>
+
+                    <button type="submit" class="btn btn-primary" id="loginBtn">
+                        <span class="btn-text">Giriş Yap</span>
+                        <span class="spinner" style="display: none;"></span>
+                    </button>
+                </form>
+
+                <div class="footer-links">
+                    <p>Hesabınız yok mu? <a href="/register">Kayıt Ol</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/js/login.js}"></script>
+</body>
+</html>

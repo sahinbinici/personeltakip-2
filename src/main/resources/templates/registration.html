@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personel Kayıt - Personnel Tracking System</title>
+    <link rel="stylesheet" th:href="@{/css/registration.css}">
+</head>
+<body>
+    <div class="container">
+        <div class="registration-card">
+            <h1>Personel Kayıt Sistemi</h1>
+            <p class="subtitle">Personnel Registration System</p>
+
+            <!-- Step 1: Personnel Validation -->
+            <div id="step1" class="form-step active">
+                <h2>Adım 1: Personel Doğrulama</h2>
+                <form id="personnelValidationForm" novalidate>
+                    <div class="form-group">
+                        <label for="tcNo">TC Kimlik No:</label>
+                        <input 
+                            type="text" 
+                            id="tcNo" 
+                            name="tcNo" 
+                            maxlength="11" 
+                            pattern="[0-9]{11}"
+                            required
+                            placeholder="11 haneli TC Kimlik No"
+                        >
+                        <span class="error-message" id="tcNoError"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="personnelNo">Sicil No:</label>
+                        <input 
+                            type="text" 
+                            id="personnelNo" 
+                            name="personnelNo" 
+                            maxlength="20"
+                            required
+                            placeholder="Sicil Numaranız"
+                        >
+                        <span class="error-message" id="personnelNoError"></span>
+                    </div>
+
+                    <div class="alert alert-error" id="step1Error" style="display: none;"></div>
+                    <div class="alert alert-success" id="step1Success" style="display: none;"></div>
+
+                    <button type="submit" class="btn btn-primary" id="validateBtn">
+                        <span class="btn-text">Doğrula</span>
+                        <span class="spinner" style="display: none;"></span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Step 2: OTP Verification -->
+            <div id="step2" class="form-step">
+                <h2>Adım 2: SMS Doğrulama</h2>
+                <p class="info-text">Cep telefonunuza gönderilen 6 haneli doğrulama kodunu giriniz.</p>
+                <p class="info-text" id="phoneDisplay"></p>
+
+                <form id="otpVerificationForm" novalidate>
+                    <div class="form-group">
+                        <label for="otpCode">Doğrulama Kodu:</label>
+                        <input 
+                            type="text" 
+                            id="otpCode" 
+                            name="otpCode" 
+                            maxlength="6" 
+                            pattern="[0-9]{6}"
+                            required
+                            placeholder="6 haneli kod"
+                            autocomplete="off"
+                        >
+                        <span class="error-message" id="otpCodeError"></span>
+                    </div>
+
+                    <div class="alert alert-error" id="step2Error" style="display: none;"></div>
+                    <div class="alert alert-success" id="step2Success" style="display: none;"></div>
+
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" id="resendOtpBtn">
+                            Kodu Tekrar Gönder
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="verifyOtpBtn">
+                            <span class="btn-text">Doğrula</span>
+                            <span class="spinner" style="display: none;"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Step 3: Password Creation -->
+            <div id="step3" class="form-step">
+                <h2>Adım 3: Şifre Oluşturma</h2>
+                <p class="info-text">Hesabınız için güvenli bir şifre oluşturunuz.</p>
+
+                <form id="passwordCreationForm" novalidate>
+                    <div class="form-group">
+                        <label for="password">Şifre:</label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required
+                            placeholder="Şifrenizi giriniz"
+                        >
+                        <span class="error-message" id="passwordError"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirmPassword">Şifre Tekrar:</label>
+                        <input 
+                            type="password" 
+                            id="confirmPassword" 
+                            name="confirmPassword" 
+                            required
+                            placeholder="Şifrenizi tekrar giriniz"
+                        >
+                        <span class="error-message" id="confirmPasswordError"></span>
+                    </div>
+
+                    <div class="password-requirements">
+                        <p class="requirements-title">Şifre Gereksinimleri:</p>
+                        <ul>
+                            <li id="req-length" class="requirement">
+                                <span class="icon">✗</span> En az 8 karakter
+                            </li>
+                            <li id="req-uppercase" class="requirement">
+                                <span class="icon">✗</span> En az bir büyük harf (A-Z)
+                            </li>
+                            <li id="req-lowercase" class="requirement">
+                                <span class="icon">✗</span> En az bir küçük harf (a-z)
+                            </li>
+                            <li id="req-special" class="requirement">
+                                <span class="icon">✗</span> En az bir özel karakter (!@#$%^&*)
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="alert alert-error" id="step3Error" style="display: none;"></div>
+                    <div class="alert alert-success" id="step3Success" style="display: none;"></div>
+
+                    <button type="submit" class="btn btn-primary" id="completeBtn">
+                        <span class="btn-text">Kaydı Tamamla</span>
+                        <span class="spinner" style="display: none;"></span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Success Message -->
+            <div id="successStep" class="form-step">
+                <div class="success-container">
+                    <div class="success-icon">✓</div>
+                    <h2>Kayıt Başarılı!</h2>
+                    <p>Hesabınız başarıyla oluşturuldu.</p>
+                    <a href="/login" class="btn btn-primary">Giriş Yap</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/js/registration.js}"></script>
+</body>
+</html>
