@@ -4,18 +4,12 @@ import com.bidb.personetakip.dto.ExternalPersonnelDto;
 import com.bidb.personetakip.dto.UserDto;
 import com.bidb.personetakip.exception.*;
 import com.bidb.personetakip.model.ExternalPersonnel;
-import com.bidb.personetakip.model.ExternalTelephone;
 import com.bidb.personetakip.model.OtpVerification;
 import com.bidb.personetakip.model.User;
 import com.bidb.personetakip.model.UserRole;
 import com.bidb.personetakip.repository.OtpVerificationRepository;
 import com.bidb.personetakip.repository.UserRepository;
 import com.bidb.personetakip.repository.external.ExternalPersonnelRepository;
-import com.bidb.personetakip.repository.external.ExternalTelephoneRepository;
-import com.bidb.personetakip.repository.external.ExternalDepartmentRepository;
-import com.bidb.personetakip.repository.external.ExternalTitleRepository;
-import com.bidb.personetakip.model.ExternalDepartment;
-import com.bidb.personetakip.model.ExternalTitle;
 import com.bidb.personetakip.util.PasswordValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,9 +28,6 @@ import java.time.LocalDateTime;
 public class RegistrationServiceImpl implements RegistrationService {
     
     private final ExternalPersonnelRepository externalPersonnelRepository;
-    private final ExternalTelephoneRepository externalTelephoneRepository;
-    private final ExternalDepartmentRepository externalDepartmentRepository;
-    private final ExternalTitleRepository externalTitleRepository;
     private final UserRepository userRepository;
     private final OtpVerificationRepository otpVerificationRepository;
     private final SmsService smsService;
@@ -47,83 +38,40 @@ public class RegistrationServiceImpl implements RegistrationService {
     @Override
     @Transactional(readOnly = true, transactionManager = "externalTransactionManager")
     public ExternalPersonnelDto validatePersonnel(String tcNo, String personnelNo) {
-        log.info("Validating personnel with TC No: {}", tcNo);
+        log.info("Validating personnel with TC No: {} and Personnel No: {}", tcNo, personnelNo);
         
         try {
-            ExternalPersonnel personnel = externalPersonnelRepository
-                .findByTcNoAndPersonnelNo(tcNo, personnelNo)
+            // Parse personnel number to Long
+            Long esicno;
+            try {
+                esicno = Long.parseLong(personnelNo);
+            } catch (NumberFormatException e) {
+                throw new PersonnelNotFoundException("Invalid personnel number format: " + personnelNo);
+            }
+            
+            // Use single SQL query with all JOINs
+            com.bidb.personetakip.dto.ExternalPersonnelFullDto fullData = externalPersonnelRepository
+                .findCompletePersonnelData(tcNo, esicno)
                 .orElseThrow(() -> new PersonnelNotFoundException(
                     "Personnel not found with TC No: " + tcNo + " and Personnel No: " + personnelNo
                 ));
             
-            log.info("Personnel validated successfully: {} {}", personnel.getFirstName(), personnel.getLastName());
+            log.info("Personnel validated successfully: {} {} (Dept: {}, Title: {})", 
+                fullData.getPeradi(), fullData.getSoyadi(), 
+                fullData.getBrkdac(), fullData.getUnvack());
             
-            // Get telephone number from telefo table
-            String mobilePhone = null;
-            try {
-                ExternalTelephone telephone = externalTelephoneRepository
-                    .findFirstByEsicno(personnel.getEsicno())
-                    .orElse(null);
-                
-                if (telephone != null) {
-                    mobilePhone = telephone.getMobilePhone();
-                    log.info("Mobile phone found for personnel: {}", mobilePhone);
-                } else {
-                    log.warn("No mobile phone found for personnel with esicno: {}", personnel.getEsicno());
-                    mobilePhone = "0000000000"; // Placeholder
-                }
-            } catch (Exception e) {
-                log.error("Error fetching telephone for personnel", e);
-                mobilePhone = "0000000000"; // Placeholder on error
-            }
-            
-            // Get department information from brkodu table
-            String departmentCode = personnel.getBrkodu();
-            String departmentName = null;
-            try {
-                if (departmentCode != null) {
-                    ExternalDepartment department = externalDepartmentRepository
-                        .findByBrkodu(departmentCode)
-                        .orElse(null);
-                    
-                    if (department != null) {
-                        departmentName = department.getBrkdac();
-                        log.info("Department found: {} - {}", departmentCode, departmentName);
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Error fetching department for personnel", e);
-            }
-            
-            // Get title information from unvkod table
-            String titleCode = personnel.getUnvkod();
-            String titleName = null;
-            try {
-                if (titleCode != null) {
-                    ExternalTitle title = externalTitleRepository
-                        .findByUnvkod(titleCode)
-                        .orElse(null);
-                    
-                    if (title != null) {
-                        titleName = title.getUnvack();
-                        log.info("Title found: {} - {}", titleCode, titleName);
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Error fetching title for personnel", e);
-            }
-            
+            // Map to ExternalPersonnelDto
             return new ExternalPersonnelDto(
-                personnel.getUserId(),
-                personnel.getTcNo(),
-                personnel.getPersonnelNo(),
-                personnel.getFirstName(),
-                personnel.getLastName(),
-                mobilePhone,
-                departmentCode,
-                departmentName,
-                titleCode,
-                titleName
+                fullData.getEsicno(),
+                fullData.getTckiml(),
+                fullData.getEsicno().toString(),
+                fullData.getPeradi(),
+                fullData.getSoyadi(),
+                fullData.getTelefo() != null ? fullData.getTelefo() : "0000000000",
+                fullData.getBrkodu(),
+                fullData.getBrkdac(),
+                fullData.getUnvkod(),
+                fullData.getUnvack()
             );
         } catch (PersonnelNotFoundException e) {
             throw e;
@@ -219,8 +167,8 @@ public class RegistrationServiceImpl implements RegistrationService {
         }
         
         // Get personnel data from external database to populate user info
-        ExternalPersonnel personnel = externalPersonnelRepository
-            .findByTcNo(tcNo)
+        com.bidb.personetakip.dto.ExternalPersonnelFullDto fullData = externalPersonnelRepository
+            .findCompletePersonnelDataByTcNo(tcNo)
             .orElseThrow(() -> new PersonnelNotFoundException("Personnel data not found for TC No: " + tcNo));
         
         // Hash password
@@ -229,10 +177,10 @@ public class RegistrationServiceImpl implements RegistrationService {
         // Create user
         User user = User.builder()
             .tcNo(tcNo)
-            .personnelNo(personnel.getPersonnelNo())
-            .firstName(personnel.getFirstName())
-            .lastName(personnel.getLastName())
-            .mobilePhone(personnel.getMobilePhone())
+            .personnelNo(fullData.getEsicno().toString())
+            .firstName(fullData.getPeradi())
+            .lastName(fullData.getSoyadi())
+            .mobilePhone(fullData.getTelefo() != null ? fullData.getTelefo() : "0000000000")
             .passwordHash(passwordHash)
             .role(UserRole.NORMAL_USER)
             .build();

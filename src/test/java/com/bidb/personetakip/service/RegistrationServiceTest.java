@@ -37,15 +37,6 @@ class RegistrationServiceTest {
     private ExternalPersonnelRepository externalPersonnelRepository;
     
     @Mock
-    private com.bidb.personetakip.repository.external.ExternalTelephoneRepository externalTelephoneRepository;
-    
-    @Mock
-    private com.bidb.personetakip.repository.external.ExternalDepartmentRepository externalDepartmentRepository;
-    
-    @Mock
-    private com.bidb.personetakip.repository.external.ExternalTitleRepository externalTitleRepository;
-    
-    @Mock
     private UserRepository userRepository;
     
     @Mock
@@ -62,7 +53,7 @@ class RegistrationServiceTest {
     
     private ExternalPersonnel testPersonnel;
     private String testTcNo = "12345678901";
-    private String testPersonnelNo = "P12345";
+    private String testPersonnelNo = "12345";
     
     @BeforeEach
     void setUp() {
@@ -79,26 +70,38 @@ class RegistrationServiceTest {
     @Test
     void validatePersonnel_WithValidData_ShouldReturnPersonnelDto() {
         // Arrange
-        when(externalPersonnelRepository.findByTcNoAndPersonnelNo(testTcNo, testPersonnelNo))
-            .thenReturn(Optional.of(testPersonnel));
+        com.bidb.personetakip.dto.ExternalPersonnelFullDto mockFullData = new com.bidb.personetakip.dto.ExternalPersonnelFullDto() {
+            @Override public Long getEsicno() { return 12345L; }
+            @Override public String getTckiml() { return testTcNo; }
+            @Override public String getPeradi() { return "Ahmet"; }
+            @Override public String getSoyadi() { return "Yılmaz"; }
+            @Override public String getBrkodu() { return "BRK001"; }
+            @Override public String getBrkdac() { return "Department Name"; }
+            @Override public String getUnvkod() { return "UNV001"; }
+            @Override public String getUnvack() { return "Title Name"; }
+            @Override public String getTelefo() { return "05551234567"; }
+        };
+        
+        when(externalPersonnelRepository.findCompletePersonnelData(testTcNo, 12345L))
+            .thenReturn(Optional.of(mockFullData));
         
         // Act
         ExternalPersonnelDto result = registrationService.validatePersonnel(testTcNo, testPersonnelNo);
         
         // Assert
         assertNotNull(result);
-        assertEquals(testPersonnel.getPersonnelNo(), result.personnelNo());
-        assertEquals(testPersonnel.getTcNo(), result.tcNo());
-        assertEquals(testPersonnel.getFirstName(), result.firstName());
-        assertEquals(testPersonnel.getLastName(), result.lastName());
+        assertEquals("12345", result.personnelNo());
+        assertEquals(testTcNo, result.tcNo());
+        assertEquals("Ahmet", result.firstName());
+        assertEquals("Yılmaz", result.lastName());
         
-        verify(externalPersonnelRepository).findByTcNoAndPersonnelNo(testTcNo, testPersonnelNo);
+        verify(externalPersonnelRepository).findCompletePersonnelData(testTcNo, 12345L);
     }
     
     @Test
     void validatePersonnel_WithInvalidData_ShouldThrowPersonnelNotFoundException() {
         // Arrange
-        when(externalPersonnelRepository.findByTcNoAndPersonnelNo(testTcNo, testPersonnelNo))
+        when(externalPersonnelRepository.findCompletePersonnelData(testTcNo, 12345L))
             .thenReturn(Optional.empty());
         
         // Act & Assert
@@ -106,13 +109,13 @@ class RegistrationServiceTest {
             registrationService.validatePersonnel(testTcNo, testPersonnelNo);
         });
         
-        verify(externalPersonnelRepository).findByTcNoAndPersonnelNo(testTcNo, testPersonnelNo);
+        verify(externalPersonnelRepository).findCompletePersonnelData(testTcNo, 12345L);
     }
     
     @Test
     void validatePersonnel_WithDatabaseError_ShouldThrowExternalServiceException() {
         // Arrange
-        when(externalPersonnelRepository.findByTcNoAndPersonnelNo(testTcNo, testPersonnelNo))
+        when(externalPersonnelRepository.findCompletePersonnelData(testTcNo, 12345L))
             .thenThrow(new RuntimeException("Database connection failed"));
         
         // Act & Assert
@@ -244,9 +247,21 @@ class RegistrationServiceTest {
             .role(UserRole.NORMAL_USER)
             .build();
         
+        com.bidb.personetakip.dto.ExternalPersonnelFullDto mockFullData = new com.bidb.personetakip.dto.ExternalPersonnelFullDto() {
+            @Override public Long getEsicno() { return 12345L; }
+            @Override public String getTckiml() { return testTcNo; }
+            @Override public String getPeradi() { return "Ahmet"; }
+            @Override public String getSoyadi() { return "Yılmaz"; }
+            @Override public String getBrkodu() { return "BRK001"; }
+            @Override public String getBrkdac() { return "Department Name"; }
+            @Override public String getUnvkod() { return "UNV001"; }
+            @Override public String getUnvack() { return "Title Name"; }
+            @Override public String getTelefo() { return "05551234567"; }
+        };
+        
         when(userRepository.existsByTcNo(testTcNo)).thenReturn(false);
         when(otpVerificationRepository.findAll()).thenReturn(List.of(verifiedOtp));
-        when(externalPersonnelRepository.findByTcNo(testTcNo)).thenReturn(Optional.of(testPersonnel));
+        when(externalPersonnelRepository.findCompletePersonnelDataByTcNo(testTcNo)).thenReturn(Optional.of(mockFullData));
         when(passwordEncoder.encode(password)).thenReturn(hashedPassword);
         when(userRepository.save(any(User.class))).thenReturn(savedUser);
         

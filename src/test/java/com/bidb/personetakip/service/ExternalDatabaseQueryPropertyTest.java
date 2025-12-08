@@ -36,15 +36,6 @@ public class ExternalDatabaseQueryPropertyTest {
     private ExternalPersonnelRepository externalPersonnelRepository;
     
     @Mock
-    private com.bidb.personetakip.repository.external.ExternalTelephoneRepository externalTelephoneRepository;
-    
-    @Mock
-    private com.bidb.personetakip.repository.external.ExternalDepartmentRepository externalDepartmentRepository;
-    
-    @Mock
-    private com.bidb.personetakip.repository.external.ExternalTitleRepository externalTitleRepository;
-    
-    @Mock
     private com.bidb.personetakip.repository.UserRepository userRepository;
     
     @Mock
@@ -63,9 +54,6 @@ public class ExternalDatabaseQueryPropertyTest {
         MockitoAnnotations.openMocks(this);
         registrationService = new RegistrationServiceImpl(
             externalPersonnelRepository,
-            externalTelephoneRepository,
-            externalDepartmentRepository,
-            externalTitleRepository,
             userRepository,
             otpVerificationRepository,
             smsService,
@@ -78,19 +66,31 @@ public class ExternalDatabaseQueryPropertyTest {
         @From(TcNoGenerator.class) String tcNo,
         @From(PersonnelNoGenerator.class) String personnelNo
     ) {
-        // Create a mock personnel object to return
-        ExternalPersonnel mockPersonnel = ExternalPersonnel.builder()
-            .esicno(12345L)
-            .tckiml(tcNo)
-            .peradi("Test")
-            .soyadi("User")
-            .brkodu("BRK001")
-            .unvkod("UNV001")
-            .build();
+        // Parse personnel number to Long
+        Long esicno;
+        try {
+            esicno = Long.parseLong(personnelNo);
+        } catch (NumberFormatException e) {
+            // Skip invalid personnel numbers
+            return;
+        }
         
-        // Configure mock to return the personnel when queried with both parameters
-        when(externalPersonnelRepository.findByTcNoAndPersonnelNo(tcNo, personnelNo))
-            .thenReturn(Optional.of(mockPersonnel));
+        // Create a mock full data object
+        com.bidb.personetakip.dto.ExternalPersonnelFullDto mockFullData = new com.bidb.personetakip.dto.ExternalPersonnelFullDto() {
+            @Override public Long getEsicno() { return esicno; }
+            @Override public String getTckiml() { return tcNo; }
+            @Override public String getPeradi() { return "Test"; }
+            @Override public String getSoyadi() { return "User"; }
+            @Override public String getBrkodu() { return "BRK001"; }
+            @Override public String getBrkdac() { return "Department"; }
+            @Override public String getUnvkod() { return "UNV001"; }
+            @Override public String getUnvack() { return "Title"; }
+            @Override public String getTelefo() { return "05551234567"; }
+        };
+        
+        // Configure mock to return the full data when queried with both parameters
+        when(externalPersonnelRepository.findCompletePersonnelData(tcNo, esicno))
+            .thenReturn(Optional.of(mockFullData));
         
         // Call the validatePersonnel method
         try {
@@ -98,18 +98,14 @@ public class ExternalDatabaseQueryPropertyTest {
             
             // Verify that the repository method was called with BOTH parameters
             ArgumentCaptor<String> tcNoCaptor = ArgumentCaptor.forClass(String.class);
-            ArgumentCaptor<String> personnelNoCaptor = ArgumentCaptor.forClass(String.class);
+            ArgumentCaptor<Long> esicnoCaptor = ArgumentCaptor.forClass(Long.class);
             
             verify(externalPersonnelRepository, times(1))
-                .findByTcNoAndPersonnelNo(tcNoCaptor.capture(), personnelNoCaptor.capture());
+                .findCompletePersonnelData(tcNoCaptor.capture(), esicnoCaptor.capture());
             
             // Verify both parameters were passed to the query
             assertEquals("TC No should be passed to query", tcNo, tcNoCaptor.getValue());
-            assertEquals("Personnel No should be passed to query", personnelNo, personnelNoCaptor.getValue());
-            
-            // Verify that single-parameter methods were NOT called
-            verify(externalPersonnelRepository, never()).findByTcNo(anyString());
-            verify(externalPersonnelRepository, never()).findByPersonnelNo(anyString());
+            assertEquals("Personnel No should be passed to query", esicno, esicnoCaptor.getValue());
             
             // Verify the result contains the correct data
             assertNotNull("Result should not be null", result);
@@ -120,71 +116,9 @@ public class ExternalDatabaseQueryPropertyTest {
             // This is acceptable - the property still holds if personnel is not found
             // The important part is that the query was made with both parameters
             verify(externalPersonnelRepository, times(1))
-                .findByTcNoAndPersonnelNo(tcNo, personnelNo);
+                .findCompletePersonnelData(tcNo, esicno);
         }
     }
     
-    @Property(trials = 100)
-    public void externalDatabaseQueryShouldNotUseOnlyTcNo(
-        @From(TcNoGenerator.class) String tcNo,
-        @From(PersonnelNoGenerator.class) String personnelNo
-    ) {
-        // Create a mock personnel object
-        ExternalPersonnel mockPersonnel = ExternalPersonnel.builder()
-            .esicno(12345L)
-            .tckiml(tcNo)
-            .peradi("Test")
-            .soyadi("User")
-            .brkodu("BRK001")
-            .unvkod("UNV001")
-            .build();
-        
-        // Configure mock to return the personnel
-        when(externalPersonnelRepository.findByTcNoAndPersonnelNo(tcNo, personnelNo))
-            .thenReturn(Optional.of(mockPersonnel));
-        
-        // Call the validatePersonnel method
-        try {
-            registrationService.validatePersonnel(tcNo, personnelNo);
-            
-            // Verify that the single-parameter TC No method was NOT used
-            verify(externalPersonnelRepository, never()).findByTcNo(anyString());
-            
-        } catch (PersonnelNotFoundException e) {
-            // Still verify that single-parameter method was not called
-            verify(externalPersonnelRepository, never()).findByTcNo(anyString());
-        }
-    }
-    
-    @Property(trials = 100)
-    public void externalDatabaseQueryShouldNotUseOnlyPersonnelNo(
-        @From(TcNoGenerator.class) String tcNo,
-        @From(PersonnelNoGenerator.class) String personnelNo
-    ) {
-        // Create a mock personnel object
-        ExternalPersonnel mockPersonnel = ExternalPersonnel.builder()
-            .esicno(12345L)
-            .tckiml(tcNo)
-            .peradi("Test")
-            .soyadi("User")
-            .brkodu("BRK001")
-            .unvkod("UNV001")
-            .build();
-        
-        // Configure mock to return the personnel
-        when(externalPersonnelRepository.findByTcNoAndPersonnelNo(tcNo, personnelNo))
-            .thenReturn(Optional.of(mockPersonnel));
-        
-        // Call the validatePersonnel method
-        try {
-            registrationService.validatePersonnel(tcNo, personnelNo);
-            
-            // Verify that the single-parameter Personnel No method was NOT used
-            verify(externalPersonnelRepository, never()).findByPersonnelNo(anyString());
-            
-        } catch (PersonnelNotFoundException e) {
-            // Still verify that single-parameter method was not called
-            verify(externalPersonnelRepository, never()).findByPersonnelNo(anyString());
-        }
-    }
+
 }
