@@ -1,5 +1,7 @@
 package com.bidb.personetakip.dto;
 
+import com.bidb.personetakip.model.UserRole;
+
 /**
  * DTO for user response data
  */
@@ -9,5 +11,8 @@ public record UserDto(
     String personnelNo,
     String firstName,
     String lastName,
-    String role
+    String mobilePhone,
+    String departmentCode,
+    String titleCode,
+    UserRole role
 ) {}

@@ -33,6 +33,7 @@ class SmsServiceTest {
     private SmsServiceImpl smsService;
     
     private static final String TEST_GATEWAY_URL = "http://test-gateway.com/sms";
+    private static final String TEST_API_ID = "test-api-id";
     private static final String TEST_API_KEY = "test-api-key";
     private static final String TEST_SENDER_ID = "TestSender";
     private static final int OTP_LENGTH = 6;
@@ -41,6 +42,7 @@ class SmsServiceTest {
     void setUp() {
         smsService = new SmsServiceImpl();
         ReflectionTestUtils.setField(smsService, "smsGatewayUrl", TEST_GATEWAY_URL);
+        ReflectionTestUtils.setField(smsService, "apiId", TEST_API_ID);
         ReflectionTestUtils.setField(smsService, "apiKey", TEST_API_KEY);
         ReflectionTestUtils.setField(smsService, "senderId", TEST_SENDER_ID);
         ReflectionTestUtils.setField(smsService, "otpLength", OTP_LENGTH);
@@ -124,12 +126,12 @@ class SmsServiceTest {
     }
     
     /**
-     * Test SMS sending with correct headers and body.
+     * Test SMS sending with correct headers and body for VatanSMS API format.
      */
     @Test
     void testSendSms_CorrectRequestFormat() {
         // Arrange
-        String phoneNumber = "+905551234567";
+        String phoneNumber = "05551234567";
         String message = "Test message";
         
         ResponseEntity<String> successResponse = new ResponseEntity<>("Success", HttpStatus.OK);
@@ -146,18 +148,25 @@ class SmsServiceTest {
         smsService.sendSms(phoneNumber, message);
         
         // Assert
-        HttpEntity<Map<String, String>> capturedRequest = requestCaptor.getValue();
+        HttpEntity<Map<String, Object>> capturedRequest = requestCaptor.getValue();
         
-        // Verify headers
-        assertNotNull(capturedRequest.getHeaders().get("X-API-Key"));
-        assertEquals(TEST_API_KEY, capturedRequest.getHeaders().getFirst("X-API-Key"));
+        // Verify headers - should be JSON content type
+        assertEquals("application/json", capturedRequest.getHeaders().getContentType().toString());
         
-        // Verify body
-        Map<String, String> body = capturedRequest.getBody();
+        // Verify body - VatanSMS API format
+        Map<String, Object> body = capturedRequest.getBody();
         assertNotNull(body);
-        assertEquals(phoneNumber, body.get("to"));
+        assertEquals(TEST_API_ID, body.get("api_id"));
+        assertEquals(TEST_API_KEY, body.get("api_key"));
         assertEquals(message, body.get("message"));
         assertEquals(TEST_SENDER_ID, body.get("sender"));
+        assertEquals("normal", body.get("message_type"));
+        
+        // Verify phone number formatting (should remove leading 0)
+        String[] phones = (String[]) body.get("phones");
+        assertNotNull(phones);
+        assertEquals(1, phones.length);
+        assertEquals("5551234567", phones[0]); // Leading 0 removed
     }
     
     /**

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="tr" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kullanıcı Yönetimi - Personel Takip Sistemi</title>
+    <link rel="stylesheet" href="/css/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Navigation Sidebar -->
+        <nav class="admin-sidebar">
+            <div class="sidebar-header">
+                <h2><i class="fas fa-shield-alt"></i> Admin Panel</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li>
+                    <a href="/admin/dashboard">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="active">
+                    <a href="/admin/users">
+                        <i class="fas fa-users"></i>
+                        <span>Kullanıcı Yönetimi</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/records">
+                        <i class="fas fa-clipboard-list"></i>
+                        <span>Giriş/Çıkış Kayıtları</span>
+                    </a>
+                </li>
+                <li class="sidebar-divider"></li>
+                <li>
+                    <a href="/qrcode" class="sidebar-link-secondary">
+                        <i class="fas fa-qrcode"></i>
+                        <span>QR Kod Sayfası</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" onclick="logout()" class="sidebar-link-danger">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Çıkış Yap</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <!-- Header -->
+            <header class="admin-header">
+                <div class="header-left">
+                    <h1>Kullanıcı Yönetimi</h1>
+                    <p class="header-subtitle">Sistem kullanıcılarını yönetin ve rollerini düzenleyin</p>
+                </div>
+                <div class="header-right">
+                    <div class="user-info">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="adminUserName">Admin</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Search and Filter Section -->
+            <section class="search-section">
+                <div class="search-container">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchInput" placeholder="TC No, Ad, Soyad veya Sicil No ile ara...">
+                        <button id="clearSearch" class="clear-btn" style="display: none;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="filter-box">
+                        <select id="roleFilter">
+                            <option value="">Tüm Roller</option>
+                            <option value="NORMAL_USER">Normal Kullanıcı</option>
+                            <option value="ADMIN">Yönetici</option>
+                            <option value="SUPER_ADMIN">Süper Yönetici</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-box">
+                        <select id="departmentFilter">
+                            <option value="">Tüm Departmanlar</option>
+                            <!-- Departments will be loaded dynamically -->
+                        </select>
+                    </div>
+                    
+                    <button id="refreshBtn" class="refresh-btn">
+                        <i class="fas fa-sync-alt"></i>
+                        Yenile
+                    </button>
+                </div>
+            </section>
+
+            <!-- User Statistics -->
+            <section class="stats-section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="totalUsersCount">--</h3>
+                            <p>Toplam Kullanıcı</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon normal">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="normalUsersCount">--</h3>
+                            <p>Normal Kullanıcı</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon admin">
+                            <i class="fas fa-user-shield"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="adminUsersCount">--</h3>
+                            <p>Yönetici</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon super-admin">
+                            <i class="fas fa-crown"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="superAdminUsersCount">--</h3>
+                            <p>Süper Yönetici</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Users Table -->
+            <section class="table-section">
+                <div class="table-header">
+                    <h2><i class="fas fa-list"></i> Kullanıcı Listesi</h2>
+                    <div class="table-info">
+                        <span id="tableInfo">Yükleniyor...</span>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <table class="users-table">
+                        <thead>
+                            <tr>
+                                <th>TC Kimlik No</th>
+                                <th>Ad Soyad</th>
+                                <th>Sicil No</th>
+                                <th>Departman</th>
+                                <th>Telefon</th>
+                                <th>Rol</th>
+                                <th>Kayıt Tarihi</th>
+                                <th>İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr>
+                                <td colspan="8" class="loading-row">
+                                    <div class="loading">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        Kullanıcılar yükleniyor...
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                <div class="pagination-container">
+                    <div class="pagination-info">
+                        <span id="paginationInfo">--</span>
+                    </div>
+                    <div class="pagination">
+                        <button id="prevPageBtn" class="page-btn" disabled>
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <div id="pageNumbers" class="page-numbers">
+                            <!-- Page numbers will be inserted here -->
+                        </div>
+                        <button id="nextPageBtn" class="page-btn" disabled>
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- User Detail Modal -->
+    <div id="userDetailModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-user"></i> Kullanıcı Detayları</h3>
+                <button class="modal-close" onclick="closeUserDetailModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="userDetailContent">
+                <!-- User details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Role Change Modal -->
+    <div id="roleChangeModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-cog"></i> Rol Değiştir</h3>
+                <button class="modal-close" onclick="closeRoleChangeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Kullanıcının rolünü değiştirmek istediğinizden emin misiniz?</p>
+                <div class="role-change-info">
+                    <div class="user-info-row">
+                        <strong>Kullanıcı:</strong> <span id="roleChangeUserName">--</span>
+                    </div>
+                    <div class="user-info-row">
+                        <strong>Mevcut Rol:</strong> <span id="roleChangeCurrentRole">--</span>
+                    </div>
+                    <div class="user-info-row">
+                        <strong>Yeni Rol:</strong>
+                        <select id="newRoleSelect">
+                            <option value="NORMAL_USER">Normal Kullanıcı</option>
+                            <option value="ADMIN">Yönetici</option>
+                            <option value="SUPER_ADMIN">Süper Yönetici</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeRoleChangeModal()">İptal</button>
+                <button class="btn btn-primary" onclick="confirmRoleChange()">Rol Değiştir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>İşlem yapılıyor...</p>
+        </div>
+    </div>
+
+    <!-- Error Alert -->
+    <div id="errorAlert" class="alert alert-error" style="display: none;">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span id="errorMessage"></span>
+        <button onclick="hideError()" class="alert-close">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <!-- Success Alert -->
+    <div id="successAlert" class="alert alert-success" style="display: none;">
+        <i class="fas fa-check-circle"></i>
+        <span id="successMessage"></span>
+        <button onclick="hideSuccess()" class="alert-close">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <script src="/js/admin.js"></script>
+    <script src="/js/admin-users.js"></script>
+</body>
+</html>

@@ -1,16 +1,19 @@
 package com.bidb.personetakip.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
 
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
@@ -42,10 +45,38 @@ public class SmsServiceImpl implements SmsService {
     @Value("${otp.length:6}")
     private int otpLength;
     
-    private final ObjectMapper objectMapper;
+    private RestTemplate restTemplate;
     
     public SmsServiceImpl() {
-        this.objectMapper = new ObjectMapper();
+        this(new RestTemplate());
+    }
+
+    public SmsServiceImpl(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
+    
+    /**
+     * Formats phone number for SMS API.
+     * Removes leading 0 from Turkish phone numbers (05xxxxxxxxx -> 5xxxxxxxxx)
+     * 
+     * @param phoneNumber Raw phone number
+     * @return Formatted phone number
+     */
+    private String formatPhoneNumber(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.isEmpty()) {
+            return phoneNumber;
+        }
+        
+        // Remove all non-digit characters
+        String cleaned = phoneNumber.replaceAll("\\D", "");
+        
+        // If starts with 0, remove it (Turkish format: 05xxxxxxxxx -> 5xxxxxxxxx)
+        if (cleaned.startsWith("0")) {
+            cleaned = cleaned.substring(1);
+        }
+        
+        logger.debug("Formatted phone number: {} -> {}", phoneNumber, cleaned);
+        return cleaned;
     }
     
     /**
@@ -57,42 +88,51 @@ public class SmsServiceImpl implements SmsService {
     @Retry(name = "smsGateway", fallbackMethod = "sendSmsFallback")
     @CircuitBreaker(name = "smsGateway", fallbackMethod = "sendSmsFallback")
     public void sendSms(String phoneNumber, String message) {
-        logger.debug("Attempting to send SMS to: {} via VatanSMS", phoneNumber);
+        // Format phone number (remove leading 0)
+        String formattedPhone = formatPhoneNumber(phoneNumber);
+        
+        logger.info("Attempting to send SMS to: {} (formatted: {}) via VatanSMS", phoneNumber, formattedPhone);
         
         try {
-            URL url = new URL(smsGatewayUrl);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setDoOutput(true);
-            
-            // Prepare request body according to VatanSMS API format
-            Map<String, Object> params = new HashMap<>();
-            params.put("api_id", apiId);
-            params.put("api_key", apiKey);
-            params.put("sender", senderId);
-            params.put("message_type", "normal");
-            params.put("message", message);
-            params.put("phones", new String[]{phoneNumber});
-            
-            String jsonInputString = objectMapper.writeValueAsString(params);
-            
-            try (OutputStream os = conn.getOutputStream()) {
-                byte[] input = jsonInputString.getBytes("utf-8");
-                os.write(input, 0, input.length);
+            // VatanSMS API uses POST request with JSON body
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            // Build JSON request body
+            Map<String, Object> body = new HashMap<>();
+            body.put("api_id", apiId);
+            body.put("api_key", apiKey);
+            body.put("sender", senderId);
+            body.put("message_type", "normal");
+            body.put("message", message);
+            body.put("phones", new String[]{formattedPhone});
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                smsGatewayUrl,
+                HttpMethod.POST,
+                request,
+                String.class
+            );
+
+            logger.info("VatanSMS Response Code: {}, Body: {}", response.getStatusCode(), response.getBody());
+
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw new SmsServiceException("SMS gateway returned non-success status: " + response.getStatusCode());
             }
             
-            int responseCode = conn.getResponseCode();
-            String responseMessage = conn.getResponseMessage();
-            
-            logger.info("VatanSMS Response Code: {}, Message: {}", responseCode, responseMessage);
-            
-            if (responseCode >= 200 && responseCode < 300) {
-                logger.info("SMS sent successfully to: {}", phoneNumber);
-            } else {
-                throw new SmsServiceException("SMS gateway returned non-success status: " + responseCode + " - " + responseMessage);
+            // Check if response contains error
+            String responseBody = response.getBody();
+            if (responseBody != null && (responseBody.contains("error") || responseBody.contains("hata"))) {
+                logger.error("VatanSMS returned error: {}", responseBody);
+                throw new SmsServiceException("SMS gateway returned error: " + responseBody);
             }
             
+            logger.info("SMS sent successfully to: {} (formatted: {})", phoneNumber, formattedPhone);
+        } catch (RestClientException e) {
+            logger.error("Failed to send SMS to {}: {}", phoneNumber, e.getMessage());
+            throw new SmsServiceException("Failed to send SMS", e);
         } catch (Exception e) {
             logger.error("Failed to send SMS to {}: {}", phoneNumber, e.getMessage());
             throw new SmsServiceException("Failed to send SMS", e);

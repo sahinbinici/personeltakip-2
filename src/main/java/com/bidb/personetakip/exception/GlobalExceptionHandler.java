@@ -2,12 +2,15 @@ package com.bidb.personetakip.exception;
 
 import com.bidb.personetakip.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 
 /**
  * Global exception handler for all REST API endpoints
@@ -36,6 +39,99 @@ public class GlobalExceptionHandler {
         );
         
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+    
+    /**
+     * Handle bean validation errors from @Valid annotated request bodies.
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
+            MethodArgumentNotValidException ex,
+            HttpServletRequest request) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+            .findFirst()
+            .map(err -> err.getDefaultMessage())
+            .orElse("Validation failed");
+        
+        ErrorResponse errorResponse = ErrorResponse.of(
+            HttpStatus.BAD_REQUEST.value(),
+            "Bad Request",
+            message,
+            request.getRequestURI()
+        );
+        
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+    
+    /**
+     * Handle validation errors raised as ConstraintViolationException.
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(
+            ConstraintViolationException ex,
+            HttpServletRequest request) {
+        String message = ex.getConstraintViolations().stream()
+            .findFirst()
+            .map(v -> v.getMessage())
+            .orElse("Validation failed");
+        
+        ErrorResponse errorResponse = ErrorResponse.of(
+            HttpStatus.BAD_REQUEST.value(),
+            "Bad Request",
+            message,
+            request.getRequestURI()
+        );
+        
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+    
+    /**
+     * Handle missing request parameters (e.g., required query params).
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingRequestParam(
+            MissingServletRequestParameterException ex,
+            HttpServletRequest request) {
+        ErrorResponse errorResponse = ErrorResponse.of(
+            HttpStatus.BAD_REQUEST.value(),
+            "Bad Request",
+            ex.getMessage(),
+            request.getRequestURI()
+        );
+        
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+    
+    /**
+     * Handle OTP verification related errors → HTTP 400.
+     */
+    @ExceptionHandler({OtpVerificationException.class, OtpNotVerifiedException.class})
+    public ResponseEntity<ErrorResponse> handleOtpErrors(
+            RuntimeException ex,
+            HttpServletRequest request) {
+        ErrorResponse errorResponse = ErrorResponse.of(
+            HttpStatus.BAD_REQUEST.value(),
+            "Bad Request",
+            ex.getMessage(),
+            request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+    
+    /**
+     * Handle personnel not found → HTTP 404.
+     */
+    @ExceptionHandler(PersonnelNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handlePersonnelNotFound(
+            PersonnelNotFoundException ex,
+            HttpServletRequest request) {
+        ErrorResponse errorResponse = ErrorResponse.of(
+            HttpStatus.NOT_FOUND.value(),
+            "Not Found",
+            ex.getMessage(),
+            request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
     }
     
     /**

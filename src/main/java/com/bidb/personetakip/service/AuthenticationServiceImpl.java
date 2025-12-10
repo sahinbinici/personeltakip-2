@@ -2,6 +2,7 @@ package com.bidb.personetakip.service;
 
 import com.bidb.personetakip.dto.AuthTokenDto;
 import com.bidb.personetakip.dto.UserDto;
+import com.bidb.personetakip.exception.AuthenticationException;
 import com.bidb.personetakip.exception.ValidationException;
 import com.bidb.personetakip.model.User;
 import com.bidb.personetakip.repository.UserRepository;
@@ -47,20 +48,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         User user = userRepository.findByTcNo(tcNo)
                 .orElseThrow(() -> {
                     log.warn("Login failed: User not found for TC No: {}", tcNo);
-                    return new ValidationException("Invalid TC number or password");
+                    return new AuthenticationException("Invalid TC number or password");
                 });
         
         // Requirement 4.2: Verify password using BCrypt
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             log.warn("Login failed: Invalid password for TC No: {}", tcNo);
-            throw new ValidationException("Invalid TC number or password");
+            throw new AuthenticationException("Invalid TC number or password");
         }
         
         // Requirement 4.3: Generate JWT token with userId, tcNo, and role
         String token = jwtUtil.generateToken(user);
         
         // Requirement 4.5: Return token with 30-minute expiration time
-        Long expiresIn = jwtUtil.getExpirationTime();
+        Long expiresIn = jwtUtil.getExpirationTime() / 1000; // convert ms to seconds for API contract
         
         UserDto userDto = new UserDto(
                 user.getId(),
@@ -68,7 +69,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 user.getPersonnelNo(),
                 user.getFirstName(),
                 user.getLastName(),
-                user.getRole().name()
+                user.getMobilePhone(),
+                user.getDepartmentCode(),
+                user.getTitleCode(),
+                user.getRole()
         );
         
         log.info("Login successful for TC No: {}, User ID: {}", tcNo, user.getId());
@@ -115,7 +119,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 user.getPersonnelNo(),
                 user.getFirstName(),
                 user.getLastName(),
-                user.getRole().name()
+                user.getMobilePhone(),
+                user.getDepartmentCode(),
+                user.getTitleCode(),
+                user.getRole()
         );
     }
 }

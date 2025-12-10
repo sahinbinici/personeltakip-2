@@ -18,7 +18,8 @@ import java.time.LocalDateTime;
 @Table(name = "entry_exit_records", indexes = {
     @Index(name = "idx_user_id", columnList = "user_id"),
     @Index(name = "idx_timestamp", columnList = "timestamp"),
-    @Index(name = "idx_qr_code", columnList = "qr_code_value")
+    @Index(name = "idx_qr_code", columnList = "qr_code_value"),
+    @Index(name = "idx_ip_address", columnList = "ip_address")
 })
 @Data
 @NoArgsConstructor
@@ -55,7 +56,7 @@ public class EntryExitRecord {
     /**
      * GPS latitude coordinate (-90 to 90 degrees)
      */
-    @Column(name = "latitude", columnDefinition = "DECIMAL(10, 8)")
+    @Column(name = "latitude")
     @DecimalMin(value = "-90.0", message = "Latitude must be between -90 and 90 degrees")
     @DecimalMax(value = "90.0", message = "Latitude must be between -90 and 90 degrees")
     private Double latitude;
@@ -63,7 +64,7 @@ public class EntryExitRecord {
     /**
      * GPS longitude coordinate (-180 to 180 degrees)
      */
-    @Column(name = "longitude", columnDefinition = "DECIMAL(11, 8)")
+    @Column(name = "longitude")
     @DecimalMin(value = "-180.0", message = "Longitude must be between -180 and 180 degrees")
     @DecimalMax(value = "180.0", message = "Longitude must be between -180 and 180 degrees")
     private Double longitude;
@@ -74,6 +75,14 @@ public class EntryExitRecord {
     @Column(name = "qr_code_value", nullable = false)
     @NotBlank(message = "QR code value is required")
     private String qrCodeValue;
+    
+    /**
+     * IP address from which the entry/exit was performed
+     * Supports both IPv4 and IPv6 formats, null for unknown/unavailable
+     */
+    @Column(name = "ip_address", length = 45)
+    @Size(max = 45, message = "IP address must not exceed 45 characters")
+    private String ipAddress;
     
     /**
      * Timestamp when the record was created in the database

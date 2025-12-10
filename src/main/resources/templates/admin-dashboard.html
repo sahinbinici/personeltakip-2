@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="tr" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Personel Takip Sistemi</title>
+    <link rel="stylesheet" href="/css/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Navigation Sidebar -->
+        <nav class="admin-sidebar">
+            <div class="sidebar-header">
+                <h2><i class="fas fa-shield-alt"></i> Admin Panel</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="active">
+                    <a href="/admin/dashboard">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/users">
+                        <i class="fas fa-users"></i>
+                        <span>Kullanıcı Yönetimi</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/records">
+                        <i class="fas fa-clipboard-list"></i>
+                        <span>Giriş/Çıkış Kayıtları</span>
+                    </a>
+                </li>
+                <li class="sidebar-divider"></li>
+                <li>
+                    <a href="/qrcode" class="sidebar-link-secondary">
+                        <i class="fas fa-qrcode"></i>
+                        <span>QR Kod Sayfası</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" onclick="logout()" class="sidebar-link-danger">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Çıkış Yap</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <!-- Header -->
+            <header class="admin-header">
+                <div class="header-left">
+                    <h1>Dashboard</h1>
+                    <p class="header-subtitle">Sistem istatistikleri ve son aktiviteler</p>
+                </div>
+                <div class="header-right">
+                    <div class="user-info">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="adminUserName">Admin</span>
+                    </div>
+                    <div class="last-updated">
+                        Son güncelleme: <span id="lastUpdated">--</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Statistics Cards -->
+            <section class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="totalUsers">--</h3>
+                        <p>Toplam Kullanıcı</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon entry">
+                        <i class="fas fa-sign-in-alt"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="todayEntries">--</h3>
+                        <p>Bugünkü Girişler</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon exit">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="todayExits">--</h3>
+                        <p>Bugünkü Çıkışlar</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon activity">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="todayTotal">--</h3>
+                        <p>Toplam Aktivite</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Activity Section -->
+            <section class="dashboard-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-clock"></i> Son Aktiviteler</h2>
+                    <button class="refresh-btn" onclick="refreshDashboard()">
+                        <i class="fas fa-sync-alt"></i> Yenile
+                    </button>
+                </div>
+
+                <div class="activity-grid">
+                    <!-- Recent Entry/Exit Records -->
+                    <div class="activity-card">
+                        <h3><i class="fas fa-door-open"></i> Son Giriş/Çıkış Kayıtları</h3>
+                        <div class="activity-list" id="recentRecords">
+                            <div class="loading">Yükleniyor...</div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Admin Actions -->
+                    <div class="activity-card">
+                        <h3><i class="fas fa-cog"></i> Son Admin İşlemleri</h3>
+                        <div class="activity-list" id="recentAuditLogs">
+                            <div class="loading">Yükleniyor...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Yükleniyor...</p>
+        </div>
+    </div>
+
+    <!-- Error Alert -->
+    <div id="errorAlert" class="alert alert-error" style="display: none;">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span id="errorMessage"></span>
+        <button onclick="hideError()" class="alert-close">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <script src="/js/admin.js"></script>
+    <script src="/js/admin-dashboard.js"></script>
+</body>
+</html>

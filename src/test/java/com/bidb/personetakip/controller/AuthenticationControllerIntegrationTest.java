@@ -146,6 +146,7 @@ class AuthenticationControllerIntegrationTest {
         for (int i = 0; i < 10; i++) {
             mockMvc.perform(post("/api/auth/login")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-RateLimit-Test", "true")
                     .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
         }
@@ -153,6 +154,7 @@ class AuthenticationControllerIntegrationTest {
         // 11th request should be rate limited
         mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
+                .header("X-RateLimit-Test", "true")
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isTooManyRequests())
             .andExpect(jsonPath("$.message").value("Too many login attempts. Please try again later."));

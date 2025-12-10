@@ -34,58 +34,31 @@ public class WebController {
     /**
      * Serves the login page.
      * Public endpoint - no authentication required.
-     * If user is already authenticated, redirects to QR code page.
+     * Authentication check is handled client-side to prevent redirect loops.
      * 
-     * @param request HTTP request to check for existing authentication
-     * @return login template name or redirect to QR code page
+     * @return login template name
      * Requirement: 4.1 - Handle authentication redirects
      */
     @GetMapping("/login")
-    public String login(HttpServletRequest request) {
-        // Check if user is already authenticated
-        String token = extractTokenFromRequest(request);
-        if (token != null && jwtUtil.validateToken(token)) {
-            return "redirect:/qrcode";
-        }
+    public String login() {
+        // Just serve the page - authentication check is handled client-side
+        // login.js will check localStorage for token and redirect to qrcode if needed
         return "login";
     }
 
     /**
      * Serves the QR code page.
-     * Protected endpoint - requires authentication.
-     * If user is not authenticated, redirects to login page.
+     * Public endpoint - authentication is checked client-side via JavaScript.
+     * This prevents redirect loops and allows proper token handling.
      * 
-     * @param request HTTP request to check authentication
-     * @param model Model to pass user information to the view
-     * @return qrcode template name or redirect to login page
+     * @return qrcode template name
      * Requirements: 4.1 - Handle authentication redirects
      *               5.1 - Protected QR code page
      */
     @GetMapping("/qrcode")
-    public String qrcode(HttpServletRequest request, Model model) {
-        // Check if user is authenticated
-        String token = extractTokenFromRequest(request);
-        
-        if (token == null || !jwtUtil.validateToken(token)) {
-            // Not authenticated - redirect to login
-            return "redirect:/login";
-        }
-        
-        // Extract user information from token and add to model
-        try {
-            String tcNo = jwtUtil.extractTcNo(token);
-            Long userId = jwtUtil.extractUserId(token);
-            String role = jwtUtil.extractRole(token);
-            
-            model.addAttribute("tcNo", tcNo);
-            model.addAttribute("userId", userId);
-            model.addAttribute("role", role);
-            model.addAttribute("token", token);
-        } catch (Exception e) {
-            // Token is invalid - redirect to login
-            return "redirect:/login";
-        }
-        
+    public String qrcode() {
+        // Just serve the page - authentication is handled client-side
+        // qrcode.js will check localStorage for token and redirect to login if needed
         return "qrcode";
     }
 
@@ -97,6 +70,16 @@ public class WebController {
     @GetMapping("/")
     public String index() {
         return "redirect:/login";
+    }
+    
+    /**
+     * Test page for debugging authentication.
+     * 
+     * @return test-auth template name
+     */
+    @GetMapping("/test-auth")
+    public String testAuth() {
+        return "test-auth";
     }
     
     /**

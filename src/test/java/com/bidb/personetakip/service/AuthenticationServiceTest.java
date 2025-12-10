@@ -2,6 +2,7 @@ package com.bidb.personetakip.service;
 
 import com.bidb.personetakip.dto.AuthTokenDto;
 import com.bidb.personetakip.dto.UserDto;
+import com.bidb.personetakip.exception.AuthenticationException;
 import com.bidb.personetakip.exception.ValidationException;
 import com.bidb.personetakip.model.User;
 import com.bidb.personetakip.model.UserRole;
@@ -82,7 +83,7 @@ class AuthenticationServiceTest {
         assertNotNull(result);
         assertEquals(testToken, result.token());
         assertEquals("Bearer", result.tokenType());
-        assertEquals(1800000L, result.expiresIn());
+        assertEquals(1800L, result.expiresIn());
         
         assertNotNull(result.user());
         assertEquals(testUser.getId(), result.user().id());
@@ -90,7 +91,7 @@ class AuthenticationServiceTest {
         assertEquals(testUser.getPersonnelNo(), result.user().personnelNo());
         assertEquals(testUser.getFirstName(), result.user().firstName());
         assertEquals(testUser.getLastName(), result.user().lastName());
-        assertEquals(testUser.getRole().name(), result.user().role());
+        assertEquals(testUser.getRole(), result.user().role());
         
         verify(userRepository).findByTcNo(testTcNo);
         verify(passwordEncoder).matches(testPassword, testPasswordHash);
@@ -104,13 +105,13 @@ class AuthenticationServiceTest {
      *               4.2 - Reject invalid credentials
      */
     @Test
-    void login_WithInvalidTcNo_ShouldThrowValidationException() {
+    void login_WithInvalidTcNo_ShouldThrowAuthenticationException() {
         // Arrange
         String invalidTcNo = "99999999999";
         when(userRepository.findByTcNo(invalidTcNo)).thenReturn(Optional.empty());
         
         // Act & Assert
-        ValidationException exception = assertThrows(ValidationException.class, () -> {
+        AuthenticationException exception = assertThrows(AuthenticationException.class, () -> {
             authenticationService.login(invalidTcNo, testPassword);
         });
         
@@ -126,14 +127,14 @@ class AuthenticationServiceTest {
      *               4.4 - Reject invalid credentials
      */
     @Test
-    void login_WithInvalidPassword_ShouldThrowValidationException() {
+    void login_WithInvalidPassword_ShouldThrowAuthenticationException() {
         // Arrange
         String wrongPassword = "WrongPassword123!";
         when(userRepository.findByTcNo(testTcNo)).thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches(wrongPassword, testPasswordHash)).thenReturn(false);
         
         // Act & Assert
-        ValidationException exception = assertThrows(ValidationException.class, () -> {
+        AuthenticationException exception = assertThrows(AuthenticationException.class, () -> {
             authenticationService.login(testTcNo, wrongPassword);
         });
         
@@ -188,7 +189,7 @@ class AuthenticationServiceTest {
         assertEquals(testUser.getPersonnelNo(), result.personnelNo());
         assertEquals(testUser.getFirstName(), result.firstName());
         assertEquals(testUser.getLastName(), result.lastName());
-        assertEquals(testUser.getRole().name(), result.role());
+        assertEquals(testUser.getRole(), result.role());
         
         verify(jwtUtil).validateToken(testToken);
         verify(jwtUtil).extractTcNo(testToken);
@@ -269,7 +270,7 @@ class AuthenticationServiceTest {
         
         // Assert
         assertNotNull(result);
-        assertEquals("ADMIN", result.user().role());
+        assertEquals(UserRole.ADMIN, result.user().role());
         verify(jwtUtil).generateToken(adminUser);
     }
     
@@ -290,7 +291,7 @@ class AuthenticationServiceTest {
         AuthTokenDto result = authenticationService.login(testTcNo, testPassword);
         
         // Assert
-        assertEquals(expectedExpiration, result.expiresIn());
+        assertEquals(expectedExpiration / 1000, result.expiresIn());
         verify(jwtUtil).getExpirationTime();
     }
 }

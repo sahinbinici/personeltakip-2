@@ -4,6 +4,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -23,6 +25,8 @@ import java.util.Collections;
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    
+    private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
     
     @Autowired
     private JwtUtil jwtUtil;
@@ -50,6 +54,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // Extract JWT token from Authorization header
             String jwt = extractJwtFromRequest(request);
             
+            // Debug logging
+            logger.info("JWT Filter - Request URI: {}", request.getRequestURI());
+            logger.info("JWT Filter - Token found: {}", jwt != null ? "YES" : "NO");
+            if (jwt != null) {
+                logger.info("JWT Filter - Token valid: {}", jwtUtil.validateToken(jwt));
+            }
+            
             // If token exists and is valid, set authentication
             if (jwt != null && jwtUtil.validateToken(jwt)) {
                 // Extract user details from token
@@ -74,6 +85,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 
                 // Set authentication in SecurityContext
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                logger.info("JWT Filter - Authentication set for user: {} with role: {}", userId, role);
             }
         } catch (Exception e) {
             // Log the error but don't block the request
@@ -86,18 +98,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
     
     /**
-     * Extracts JWT token from the Authorization header.
-     * Expected format: "Bearer {token}"
+     * Extracts JWT token from the Authorization header or cookies.
+     * Expected format: "Bearer {token}" in header or "jwt" cookie
      * 
      * @param request HTTP request
      * @return JWT token string or null if not present
-     * Requirement: 7.1 - Extract JWT from Authorization header
+     * Requirement: 7.1 - Extract JWT from Authorization header or cookies
      */
     private String extractJwtFromRequest(HttpServletRequest request) {
+        // First, try to get token from Authorization header
         String bearerToken = request.getHeader("Authorization");
-        
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);
+        }
+        
+        // If not found in header, try to get from cookies
+        if (request.getCookies() != null) {
+            for (jakarta.servlet.http.Cookie cookie : request.getCookies()) {
+                if ("jwt".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
         }
         
         return null;

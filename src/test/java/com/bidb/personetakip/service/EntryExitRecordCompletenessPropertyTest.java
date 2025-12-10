@@ -50,10 +50,17 @@ public class EntryExitRecordCompletenessPropertyTest {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+        // Create mock IP tracking config
+        com.bidb.personetakip.config.IpTrackingConfig mockIpTrackingConfig = 
+            mock(com.bidb.personetakip.config.IpTrackingConfig.class);
+        when(mockIpTrackingConfig.isEnabled()).thenReturn(true);
+        
         entryExitService = new EntryExitServiceImpl(
             entryExitRecordRepository, 
             qrCodeRepository, 
-            qrCodeService
+            qrCodeService,
+            null,  // IpAddressService not needed for this test
+            mockIpTrackingConfig
         );
     }
     

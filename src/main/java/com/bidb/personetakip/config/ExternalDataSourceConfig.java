@@ -1,5 +1,6 @@
 package com.bidb.personetakip.config;
 
+import com.zaxxer.hikari.HikariDataSource;
 import jakarta.persistence.EntityManagerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,16 +36,19 @@ public class ExternalDataSourceConfig {
     @Value("${external.jpa.hibernate.ddl-auto:none}")
     private String ddlAuto;
     
-    @Value("${external.datasource.url}")
+    @Value("${external.datasource.url:#{null}}")
     private String jdbcUrl;
     
-    @Value("${external.datasource.username}")
+    @Value("${external.datasource.jdbc-url:#{null}}")
+    private String jdbcUrlAlt;
+    
+    @Value("${external.datasource.username:#{null}}")
     private String username;
     
-    @Value("${external.datasource.password}")
+    @Value("${external.datasource.password:#{null}}")
     private String password;
     
-    @Value("${external.datasource.driver-class-name}")
+    @Value("${external.datasource.driver-class-name:#{null}}")
     private String driverClassName;
     
     /**
@@ -55,12 +59,33 @@ public class ExternalDataSourceConfig {
     @Bean(name = "externalDataSource")
     @ConfigurationProperties(prefix = "external.datasource")
     public DataSource externalDataSource() {
-        return DataSourceBuilder.create()
-                .url(jdbcUrl)
-                .username(username)
-                .password(password)
-                .driverClassName(driverClassName)
-                .build();
+        // Use either url or jdbc-url property
+        String url = jdbcUrl != null ? jdbcUrl : jdbcUrlAlt;
+        
+        if (url == null || url.isEmpty()) {
+            throw new IllegalStateException("External database URL is not configured. Please set external.datasource.url property.");
+        }
+        
+        HikariDataSource dataSource = new HikariDataSource();
+        dataSource.setJdbcUrl(url);
+        dataSource.setUsername(username);
+        dataSource.setPassword(password);
+        dataSource.setDriverClassName(driverClassName);
+        
+        // Configure HikariCP settings
+        dataSource.setMaximumPoolSize(5);
+        dataSource.setMinimumIdle(2);
+        dataSource.setConnectionTimeout(30000);
+        dataSource.setIdleTimeout(600000);
+        dataSource.setMaxLifetime(1800000);
+        dataSource.setReadOnly(true);
+        dataSource.setConnectionTestQuery("SELECT 1");
+        dataSource.setLeakDetectionThreshold(60000);
+        
+        // Add connection validation
+        dataSource.setInitializationFailTimeout(5000);
+        
+        return dataSource;
     }
     
     /**
@@ -81,12 +106,15 @@ public class ExternalDataSourceConfig {
         em.setJpaVendorAdapter(vendorAdapter);
         
         Map<String, Object> properties = new HashMap<>();
-        // Use create-drop for tests, none for production
+        // Use none for production
         properties.put("hibernate.hbm2ddl.auto", ddlAuto);
         properties.put("hibernate.dialect", "org.hibernate.dialect.MySQLDialect");
         properties.put("hibernate.jdbc.time_zone", "UTC");
-        // Read-only connection
+        // Read-only connection with READ_COMMITTED isolation
         properties.put("hibernate.connection.isolation", "2");
+        // External DB is read-only, don't disable autocommit
+        properties.put("hibernate.connection.provider_disables_autocommit", "false");
+        
         em.setJpaPropertyMap(properties);
         
         return em;
@@ -98,6 +126,10 @@ public class ExternalDataSourceConfig {
     @Bean(name = "externalTransactionManager")
     public PlatformTransactionManager externalTransactionManager(
             @Qualifier("externalEntityManagerFactory") EntityManagerFactory entityManagerFactory) {
-        return new JpaTransactionManager(entityManagerFactory);
+        JpaTransactionManager transactionManager = new JpaTransactionManager();
+        transactionManager.setEntityManagerFactory(entityManagerFactory);
+        // Set timeout for transactions
+        transactionManager.setDefaultTimeout(30);
+        return transactionManager;
     }
 }

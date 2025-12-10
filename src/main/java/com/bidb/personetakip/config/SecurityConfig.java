@@ -5,11 +5,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -27,6 +29,7 @@ import java.util.List;
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
     
     @Autowired
@@ -140,7 +143,8 @@ public class SecurityConfig {
                     "/",
                     "/register",
                     "/login",
-                    "/error"
+                    "/error",
+                    "/test-auth"
                 ).permitAll()
                 
                 // Static resources
@@ -163,6 +167,11 @@ public class SecurityConfig {
                     "/qrcode"
                 ).permitAll()  // Allow access but WebController handles authentication redirect
                 
+                // Admin pages - require ADMIN or SUPER_ADMIN role
+                .requestMatchers(
+                    "/admin/**"
+                ).hasAnyRole("ADMIN", "SUPER_ADMIN")
+                
                 // Protected API endpoints - require authentication
                 // QR code API endpoints
                 .requestMatchers(
@@ -174,8 +183,29 @@ public class SecurityConfig {
                     "/api/mobil/giris-cikis-kaydet"
                 ).authenticated()
                 
+                // Admin API endpoints - require ADMIN or SUPER_ADMIN role
+                .requestMatchers(
+                    "/api/admin/**"
+                ).hasAnyRole("ADMIN", "SUPER_ADMIN")
+                
                 // All other endpoints require authentication
                 .anyRequest().authenticated()
+            )
+            // Configure exception handling
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) -> {
+                    String requestURI = request.getRequestURI();
+                    
+                    // If it's an API request, return 401
+                    if (requestURI.startsWith("/api/")) {
+                        response.setStatus(401);
+                        response.getWriter().write("{\"error\":\"Unauthorized\",\"message\":\"Authentication required\"}");
+                        response.setContentType("application/json");
+                    } else {
+                        // For web pages, redirect to login
+                        response.sendRedirect("/login");
+                    }
+                })
             )
             
             // Use stateless session management (no server-side sessions)

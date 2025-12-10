@@ -43,10 +43,11 @@ public interface ExternalPersonnelRepository extends JpaRepository<ExternalPerso
     
     /**
      * Find complete personnel data with all JOINs using native SQL query
-     * This query joins person, telefo, brkodu, and unvkod tables in a single query
+     * Uses psicno (personnel number) not esicno (retired personnel number)
+     * Uses LEFT JOIN for all tables to handle missing data gracefully
      * 
      * @param tckiml Turkish Citizen ID number
-     * @param esicno Personnel/Employee number
+     * @param psicno Personnel number (sicil no)
      * @return Optional containing the complete personnel data if found
      */
     @Query(value = "SELECT p.esicno AS esicno, p.tckiml AS tckiml, p.peradi AS peradi, " +
@@ -56,15 +57,17 @@ public interface ExternalPersonnelRepository extends JpaRepository<ExternalPerso
                    "LEFT JOIN unvkod u ON p.unvkod = u.unvkod " +
                    "LEFT JOIN brkodu b ON p.brkodu = b.BRKODU " +
                    "LEFT JOIN telefo t ON p.esicno = t.esicno " +
-                   "WHERE p.tckiml = :tckiml AND p.esicno = :esicno",
+                   "WHERE p.tckiml = :tckiml AND p.psicno = :psicno " +
+                   "LIMIT 1",
            nativeQuery = true)
     Optional<ExternalPersonnelFullDto> findCompletePersonnelData(
         @Param("tckiml") String tckiml, 
-        @Param("esicno") Long esicno
+        @Param("psicno") Long psicno
     );
     
     /**
      * Find complete personnel data by TC number only
+     * Uses LEFT JOIN for all tables to handle missing data gracefully
      * 
      * @param tckiml Turkish Citizen ID number
      * @return Optional containing the complete personnel data if found

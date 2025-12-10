@@ -8,6 +8,7 @@ import com.bidb.personetakip.dto.QrCodeValidationDto;
 import com.bidb.personetakip.service.AuthenticationService;
 import com.bidb.personetakip.service.EntryExitService;
 import com.bidb.personetakip.service.QrCodeService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -67,13 +68,19 @@ public class MobileApiController {
      * POST /api/mobil/giris-cikis-kaydet
      * 
      * @param request Entry/exit request with QR code, timestamp, and GPS coordinates
+     * @param httpRequest HTTP servlet request for IP address extraction
      * @return EntryExitRecordDto containing recorded event data
      * Requirements: 8.1 - Extract JWT token from request headers
      *               8.2 - Validate QR code against current date and personnel ID
      *               8.5 - Store entry/exit record with all required fields
+     *               1.1 - Capture client IP address from HTTP request
+     *               1.2 - Handle proxy and load balancer scenarios
+     *               6.5 - Support IP tracking configuration control
      */
     @PostMapping("/giris-cikis-kaydet")
-    public ResponseEntity<?> recordEntryExit(@Valid @RequestBody EntryExitRequestDto request) {
+    public ResponseEntity<?> recordEntryExit(
+            @Valid @RequestBody EntryExitRequestDto request,
+            HttpServletRequest httpRequest) {
         Long userId = getAuthenticatedUserId();
         
         // Check rate limit
@@ -99,13 +106,15 @@ public class MobileApiController {
                 .body(Map.of("message", "Invalid GPS coordinates"));
         }
         
-        // Record entry/exit
+        // Record entry/exit with IP address capture
+        // Requirements: 1.1, 1.2, 6.2, 6.5 - IP tracking with graceful failure handling
         EntryExitRecordDto record = entryExitService.recordEntryExit(
             userId,
             request.qrCodeValue(),
             request.timestamp(),
             request.latitude(),
-            request.longitude()
+            request.longitude(),
+            httpRequest  // Pass HTTP request for IP address extraction
         );
         
         return ResponseEntity.ok(record);

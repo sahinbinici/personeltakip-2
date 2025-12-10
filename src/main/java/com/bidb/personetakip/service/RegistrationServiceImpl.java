@@ -2,26 +2,31 @@ package com.bidb.personetakip.service;
 
 import com.bidb.personetakip.dto.ExternalPersonnelDto;
 import com.bidb.personetakip.dto.UserDto;
-import com.bidb.personetakip.exception.*;
+import com.bidb.personetakip.exception.ExternalServiceException;
+import com.bidb.personetakip.exception.OtpNotVerifiedException;
+import com.bidb.personetakip.exception.PersonnelNotFoundException;
+import com.bidb.personetakip.exception.ValidationException;
 import com.bidb.personetakip.model.ExternalPersonnel;
-import com.bidb.personetakip.model.OtpVerification;
 import com.bidb.personetakip.model.User;
 import com.bidb.personetakip.model.UserRole;
 import com.bidb.personetakip.repository.OtpVerificationRepository;
 import com.bidb.personetakip.repository.UserRepository;
 import com.bidb.personetakip.repository.external.ExternalPersonnelRepository;
 import com.bidb.personetakip.util.PasswordValidator;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.util.Optional;
 
-/**
- * Implementation of RegistrationService for user registration operations.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -37,37 +42,53 @@ public class RegistrationServiceImpl implements RegistrationService {
     
     @Override
     @Transactional(readOnly = true, transactionManager = "externalTransactionManager")
+    @CircuitBreaker(name = "externalDb", fallbackMethod = "validatePersonnelFallback")
+    @Retry(name = "externalDb")
     public ExternalPersonnelDto validatePersonnel(String tcNo, String personnelNo) {
         log.info("Validating personnel with TC No: {} and Personnel No: {}", tcNo, personnelNo);
         
         try {
-            // Parse personnel number to Long
-            Long esicno;
+            // Convert personnelNo to Long for database query
+            Long personnelId;
             try {
-                esicno = Long.parseLong(personnelNo);
+                personnelId = Long.valueOf(personnelNo);
             } catch (NumberFormatException e) {
+                log.warn("Invalid personnel number format: {}", personnelNo);
                 throw new PersonnelNotFoundException("Invalid personnel number format: " + personnelNo);
             }
             
-            // Use single SQL query with all JOINs
-            com.bidb.personetakip.dto.ExternalPersonnelFullDto fullData = externalPersonnelRepository
-                .findCompletePersonnelData(tcNo, esicno)
-                .orElseThrow(() -> new PersonnelNotFoundException(
-                    "Personnel not found with TC No: " + tcNo + " and Personnel No: " + personnelNo
-                ));
+            // Query external database for complete personnel data with JOIN to get phone number
+            log.info("Querying external database with native SQL (includes telefo JOIN)");
+            Optional<com.bidb.personetakip.dto.ExternalPersonnelFullDto> fullDataOpt = 
+                externalPersonnelRepository.findCompletePersonnelData(tcNo, personnelId);
             
-            log.info("Personnel validated successfully: {} {} (Dept: {}, Title: {})", 
+            if (fullDataOpt.isEmpty()) {
+                log.warn("Personnel not found in external database - TC No: {}, Personnel No: {}", tcNo, personnelNo);
+                throw new PersonnelNotFoundException(
+                    "Personnel not found with TC No: " + tcNo + " and Personnel No: " + personnelNo
+                );
+            }
+            
+            com.bidb.personetakip.dto.ExternalPersonnelFullDto fullData = fullDataOpt.get();
+            
+            // Log phone number from DB for debugging
+            log.info("DB'den çekilen telefon numarası: {}", fullData.getTelefo());
+            
+            log.info("Personnel validated successfully: {} {} (Dept: {}, Title: {}, Phone: {})", 
                 fullData.getPeradi(), fullData.getSoyadi(), 
-                fullData.getBrkdac(), fullData.getUnvack());
+                fullData.getBrkdac(), fullData.getUnvack(), fullData.getTelefo());
             
             // Map to ExternalPersonnelDto
+            String phoneNumber = fullData.getTelefo() != null ? fullData.getTelefo() : "0000000000";
+            log.info("Kullanılacak telefon numarası: {}", phoneNumber);
+            
             return new ExternalPersonnelDto(
                 fullData.getEsicno(),
                 fullData.getTckiml(),
-                fullData.getEsicno().toString(),
+                personnelNo != null ? personnelNo : fullData.getEsicno().toString(),
                 fullData.getPeradi(),
                 fullData.getSoyadi(),
-                fullData.getTelefo() != null ? fullData.getTelefo() : "0000000000",
+                phoneNumber,
                 fullData.getBrkodu(),
                 fullData.getBrkdac(),
                 fullData.getUnvkod(),
@@ -81,6 +102,12 @@ public class RegistrationServiceImpl implements RegistrationService {
         }
     }
     
+    // Fallback method for circuit breaker
+    public ExternalPersonnelDto validatePersonnelFallback(String tcNo, String personnelNo, Exception ex) {
+        log.warn("External database circuit breaker opened. Falling back to cached data or throwing exception.");
+        throw new ExternalServiceException("External personnel database is temporarily unavailable. Please try again later.", ex);
+    }
+    
     @Override
     @Transactional
     public void sendOtpVerification(String tcNo, String mobilePhone) {
@@ -89,29 +116,21 @@ public class RegistrationServiceImpl implements RegistrationService {
         // Generate OTP
         String otpCode = smsService.generateOtp();
         
-        // Calculate expiration time
-        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(OTP_EXPIRATION_MINUTES);
-        
-        // Save OTP to database
-        OtpVerification otpVerification = OtpVerification.builder()
-            .tcNo(tcNo)
-            .otpCode(otpCode)
-            .expiresAt(expiresAt)
-            .verified(false)
-            .build();
+        // Save OTP verification record
+        var otpVerification = new com.bidb.personetakip.model.OtpVerification();
+        otpVerification.setTcNo(tcNo);
+        otpVerification.setOtpCode(otpCode);
+        otpVerification.setCreatedAt(LocalDateTime.now());
+        otpVerification.setExpiresAt(LocalDateTime.now().plusMinutes(OTP_EXPIRATION_MINUTES));
+        otpVerification.setVerified(false);
         
         otpVerificationRepository.save(otpVerification);
         
-        // Send SMS
-        String message = "Your verification code is: " + otpCode + ". Valid for " + OTP_EXPIRATION_MINUTES + " minutes.";
+        // Send OTP via SMS
+        String message = "Your verification code is: " + otpCode + ". Valid for 5 minutes.";
+        smsService.sendSms(mobilePhone, message);
         
-        try {
-            smsService.sendSms(mobilePhone, message);
-            log.info("OTP sent successfully to {}", mobilePhone);
-        } catch (SmsServiceException e) {
-            log.error("Failed to send OTP SMS", e);
-            throw e;
-        }
+        log.info("OTP sent successfully to phone: {}", mobilePhone);
     }
     
     @Override
@@ -119,26 +138,29 @@ public class RegistrationServiceImpl implements RegistrationService {
     public boolean verifyOtp(String tcNo, String otpCode) {
         log.info("Verifying OTP for TC No: {}", tcNo);
         
-        OtpVerification otpVerification = otpVerificationRepository
-            .findByTcNoAndOtpCode(tcNo, otpCode)
-            .orElseThrow(() -> new OtpVerificationException("Invalid OTP code"));
+        // Find non-expired, non-verified OTP records for this TC number
+        var otpRecords = otpVerificationRepository.findByTcNoAndVerifiedFalse(tcNo);
         
-        // Check if already verified
-        if (otpVerification.getVerified()) {
-            throw new OtpVerificationException("OTP has already been used");
+        // Check each record for match and expiration
+        for (var otpRecord : otpRecords) {
+            if (otpRecord.getOtpCode().equals(otpCode)) {
+                // Check if OTP is expired
+                if (otpRecord.getExpiresAt().isBefore(LocalDateTime.now())) {
+                    log.warn("OTP expired for TC No: {}", tcNo);
+                    throw new ValidationException("OTP code has expired");
+                }
+                
+                // Mark as verified
+                otpRecord.setVerified(true);
+                otpVerificationRepository.save(otpRecord);
+                
+                log.info("OTP verified successfully for TC No: {}", tcNo);
+                return true;
+            }
         }
         
-        // Check if expired
-        if (otpVerification.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new OtpVerificationException("OTP has expired");
-        }
-        
-        // Mark as verified
-        otpVerification.setVerified(true);
-        otpVerificationRepository.save(otpVerification);
-        
-        log.info("OTP verified successfully for TC No: {}", tcNo);
-        return true;
+        log.warn("Invalid OTP provided for TC No: {}", tcNo);
+        throw new ValidationException("Invalid OTP code");
     }
     
     @Override
@@ -146,13 +168,8 @@ public class RegistrationServiceImpl implements RegistrationService {
     public UserDto completeRegistration(String tcNo, String password) {
         log.info("Completing registration for TC No: {}", tcNo);
         
-        // Check if user already exists
-        if (userRepository.existsByTcNo(tcNo)) {
-            throw new UserAlreadyExistsException("User with TC No " + tcNo + " already exists");
-        }
-        
-        // Validate password
-        PasswordValidator.ValidationResult validationResult = PasswordValidator.validate(password);
+        // Validate password strength
+        var validationResult = PasswordValidator.validate(password);
         if (!validationResult.isValid()) {
             throw new ValidationException(validationResult.getErrorMessage());
         }
@@ -171,31 +188,48 @@ public class RegistrationServiceImpl implements RegistrationService {
             .findCompletePersonnelDataByTcNo(tcNo)
             .orElseThrow(() -> new PersonnelNotFoundException("Personnel data not found for TC No: " + tcNo));
         
+        var personnelOpt = externalPersonnelRepository.findByTcNo(tcNo);
+        String personnelNoFromRepo = personnelOpt
+            .map(ExternalPersonnel::getPersonnelNo)
+            .orElse(null);
+        String mobileFromRepo = personnelOpt
+            .map(ExternalPersonnel::getMobilePhone)
+            .orElse(null);
+        
         // Hash password
         String passwordHash = passwordEncoder.encode(password);
         
         // Create user
         User user = User.builder()
             .tcNo(tcNo)
-            .personnelNo(fullData.getEsicno().toString())
+            .personnelNo(personnelNoFromRepo != null ? personnelNoFromRepo : fullData.getEsicno().toString())
             .firstName(fullData.getPeradi())
             .lastName(fullData.getSoyadi())
-            .mobilePhone(fullData.getTelefo() != null ? fullData.getTelefo() : "0000000000")
+            .mobilePhone(mobileFromRepo != null ? mobileFromRepo : 
+                       (fullData.getTelefo() != null ? fullData.getTelefo() : "0000000000"))
+            .departmentCode(fullData.getBrkodu())
+            .departmentName(fullData.getBrkdac())
+            .titleCode(fullData.getUnvkod())
             .passwordHash(passwordHash)
             .role(UserRole.NORMAL_USER)
+            .createdAt(LocalDateTime.now())
+            .lastLoginAt(null)
             .build();
         
-        user = userRepository.save(user);
+        User savedUser = userRepository.save(user);
         
-        log.info("User registration completed successfully for TC No: {}", tcNo);
+        log.info("User registered successfully with ID: {}", savedUser.getId());
         
         return new UserDto(
-            user.getId(),
-            user.getTcNo(),
-            user.getPersonnelNo(),
-            user.getFirstName(),
-            user.getLastName(),
-            user.getRole().name()
+            savedUser.getId(),
+            savedUser.getTcNo(),
+            savedUser.getPersonnelNo(),
+            savedUser.getFirstName(),
+            savedUser.getLastName(),
+            savedUser.getMobilePhone(),
+            savedUser.getDepartmentCode(),
+            savedUser.getTitleCode(),
+            savedUser.getRole()
         );
     }
     
@@ -203,8 +237,9 @@ public class RegistrationServiceImpl implements RegistrationService {
     @Transactional
     public int cleanupExpiredOtps() {
         log.info("Cleaning up expired OTPs");
-        int deletedCount = otpVerificationRepository.deleteExpiredOtps(LocalDateTime.now());
-        log.info("Deleted {} expired OTPs", deletedCount);
+        LocalDateTime now = LocalDateTime.now();
+        int deletedCount = otpVerificationRepository.deleteExpiredOtps(now);
+        log.info("Cleaned up {} expired OTPs", deletedCount);
         return deletedCount;
     }
 }

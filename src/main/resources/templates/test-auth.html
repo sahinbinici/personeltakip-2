@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Test</title>
+</head>
+<body>
+    <h1>Authentication Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        // Check localStorage
+        const token = localStorage.getItem('authToken');
+        results.innerHTML += `<p><strong>LocalStorage Token:</strong> ${token ? 'EXISTS' : 'NOT FOUND'}</p>`;
+        if (token) {
+            results.innerHTML += `<p><strong>Token Value:</strong> ${token.substring(0, 50)}...</p>`;
+        }
+        
+        // Check cookies
+        results.innerHTML += `<p><strong>All Cookies:</strong> ${document.cookie || 'NONE'}</p>`;
+        
+        // Try to get cookie by name
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+        
+        const jwtCookie = getCookie('jwt');
+        const tokenCookie = getCookie('token');
+        
+        results.innerHTML += `<p><strong>JWT Cookie:</strong> ${jwtCookie ? 'EXISTS' : 'NOT FOUND'}</p>`;
+        results.innerHTML += `<p><strong>Token Cookie:</strong> ${tokenCookie ? 'EXISTS' : 'NOT FOUND'}</p>`;
+        
+        // Test API call
+        results.innerHTML += '<hr><h2>Testing API Call</h2>';
+        
+        fetch('/api/qrcode/daily', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        })
+        .then(response => {
+            results.innerHTML += `<p><strong>API Response Status:</strong> ${response.status}</p>`;
+            return response.json();
+        })
+        .then(data => {
+            results.innerHTML += `<p><strong>API Response:</strong> ${JSON.stringify(data)}</p>`;
+        })
+        .catch(error => {
+            results.innerHTML += `<p><strong>API Error:</strong> ${error.message}</p>`;
+        });
+    </script>
+</body>
+</html>
