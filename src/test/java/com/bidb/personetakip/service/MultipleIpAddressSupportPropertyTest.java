@@ -27,7 +27,7 @@ public class MultipleIpAddressSupportPropertyTest {
     
     @Before
     public void setUp() {
-        ipAddressService = new IpAddressServiceImpl();
+        ipAddressService = TestConfigurationHelper.createIpAddressService();
         ipComplianceService = new IpComplianceServiceImpl();
         // Manually inject the dependency since we're not using Spring context
         ((IpComplianceServiceImpl) ipComplianceService).ipAddressService = ipAddressService;

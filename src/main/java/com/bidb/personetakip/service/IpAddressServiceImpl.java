@@ -1,22 +1,30 @@
 package com.bidb.personetakip.service;
 
+import com.bidb.personetakip.exception.IpCaptureException;
+import com.bidb.personetakip.exception.IpValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
  * Implementation of IP address service for extracting, validating, and formatting IP addresses.
- * Requirements: 1.1, 1.2, 1.3, 1.4
+ * Requirements: 1.1, 1.2, 1.3, 1.4, 6.5, 5.2
  */
 @Service
 public class IpAddressServiceImpl implements IpAddressService {
     
     private static final Logger logger = LoggerFactory.getLogger(IpAddressServiceImpl.class);
+    
+    private final IpTrackingConfigurationService configService;
+    private final IpSecurityService ipSecurityService;
     
     private static final String UNKNOWN_IP_DEFAULT = "Unknown";
     
@@ -56,6 +64,13 @@ public class IpAddressServiceImpl implements IpAddressService {
         "REMOTE_ADDR"
     };
     
+    @Autowired
+    public IpAddressServiceImpl(IpTrackingConfigurationService configService,
+                               @Lazy IpSecurityService ipSecurityService) {
+        this.configService = configService;
+        this.ipSecurityService = ipSecurityService;
+    }
+    
     @Override
     public String extractClientIpAddress(HttpServletRequest request) {
         if (request == null) {
@@ -63,9 +78,25 @@ public class IpAddressServiceImpl implements IpAddressService {
             return UNKNOWN_IP_DEFAULT;
         }
         
+        // Check if IP tracking is enabled
+        if (!configService.isIpTrackingEnabled()) {
+            logger.debug("IP tracking is disabled, returning unknown IP default");
+            return UNKNOWN_IP_DEFAULT;
+        }
+        
         try {
+            // Apply timeout for IP extraction to prevent performance issues
+            long startTime = System.currentTimeMillis();
+            int timeoutMs = configService.getCaptureTimeoutMs();
+            
             // Check proxy headers first for real client IP
             for (String header : IP_HEADER_CANDIDATES) {
+                // Check timeout
+                if (System.currentTimeMillis() - startTime > timeoutMs) {
+                    logger.warn("IP extraction timeout exceeded ({}ms), returning unknown default", timeoutMs);
+                    return UNKNOWN_IP_DEFAULT;
+                }
+                
                 String ipAddress = request.getHeader(header);
                 if (isValidProxyIpAddress(ipAddress)) {
                     // X-Forwarded-For can contain multiple IPs, take the first one
@@ -92,6 +123,88 @@ public class IpAddressServiceImpl implements IpAddressService {
             
         } catch (Exception e) {
             logger.error("Error extracting IP address from request", e);
+            return UNKNOWN_IP_DEFAULT;
+        }
+    }
+    
+    /**
+     * Extracts client IP address with detailed error handling
+     * Requirements: 6.2
+     */
+    public String extractClientIpAddressWithErrorHandling(HttpServletRequest request, boolean throwOnFailure) throws IpCaptureException {
+        if (request == null) {
+            String message = "HttpServletRequest is null, cannot extract IP address";
+            logger.warn(message);
+            if (throwOnFailure) {
+                throw new IpCaptureException(message, "null_request", false);
+            }
+            return UNKNOWN_IP_DEFAULT;
+        }
+        
+        // Check if IP tracking is enabled
+        if (!configService.isIpTrackingEnabled()) {
+            String message = "IP tracking is disabled in configuration";
+            logger.debug(message);
+            if (throwOnFailure) {
+                throw new IpCaptureException(message, "tracking_disabled", false);
+            }
+            return UNKNOWN_IP_DEFAULT;
+        }
+        
+        try {
+            // Apply timeout for IP extraction to prevent performance issues
+            long startTime = System.currentTimeMillis();
+            int timeoutMs = configService.getCaptureTimeoutMs();
+            
+            // Check proxy headers first for real client IP
+            for (String header : IP_HEADER_CANDIDATES) {
+                // Check timeout
+                if (System.currentTimeMillis() - startTime > timeoutMs) {
+                    String message = String.format("IP extraction timeout exceeded (%dms)", timeoutMs);
+                    logger.warn(message);
+                    if (throwOnFailure) {
+                        throw new IpCaptureException(message, "timeout_exceeded", false);
+                    }
+                    return UNKNOWN_IP_DEFAULT;
+                }
+                
+                String ipAddress = request.getHeader(header);
+                if (isValidProxyIpAddress(ipAddress)) {
+                    // X-Forwarded-For can contain multiple IPs, take the first one
+                    if ("X-Forwarded-For".equals(header) && ipAddress.contains(",")) {
+                        ipAddress = ipAddress.split(",")[0].trim();
+                    }
+                    
+                    if (isValidIpAddress(ipAddress)) {
+                        logger.debug("Extracted IP address from header {}: {}", header, ipAddress);
+                        return ipAddress;
+                    }
+                }
+            }
+            
+            // Fall back to remote address
+            String remoteAddr = request.getRemoteAddr();
+            if (isValidIpAddress(remoteAddr)) {
+                logger.debug("Using remote address as IP: {}", remoteAddr);
+                return remoteAddr;
+            }
+            
+            String message = "Could not extract valid IP address from any request headers or remote address";
+            logger.warn(message);
+            if (throwOnFailure) {
+                throw new IpCaptureException(message, "no_valid_ip_found", false);
+            }
+            return UNKNOWN_IP_DEFAULT;
+            
+        } catch (IpCaptureException e) {
+            // Re-throw IP capture exceptions
+            throw e;
+        } catch (Exception e) {
+            String message = "Unexpected error during IP address extraction: " + e.getMessage();
+            logger.error(message, e);
+            if (throwOnFailure) {
+                throw new IpCaptureException(message, "unexpected_error", e);
+            }
             return UNKNOWN_IP_DEFAULT;
         }
     }
@@ -128,6 +241,54 @@ public class IpAddressServiceImpl implements IpAddressService {
         return false;
     }
     
+    /**
+     * Validates IP address and throws detailed exception if invalid
+     * Requirements: 1.3, 1.4
+     */
+    public void validateIpAddressWithException(String ipAddress) throws IpValidationException {
+        if (ipAddress == null) {
+            throw new IpValidationException("IP address cannot be null", null, "null value");
+        }
+        
+        if (ipAddress.trim().isEmpty()) {
+            throw new IpValidationException("IP address cannot be empty", ipAddress, "empty string");
+        }
+        
+        String trimmedIp = ipAddress.trim();
+        
+        // Check for common invalid patterns
+        if (trimmedIp.length() > 45) { // Max length for IPv6
+            throw new IpValidationException("IP address too long", trimmedIp, "exceeds maximum length of 45 characters");
+        }
+        
+        if (trimmedIp.contains(" ")) {
+            throw new IpValidationException("IP address contains spaces", trimmedIp, "spaces not allowed in IP addresses");
+        }
+        
+        // Check IPv4 format
+        if (trimmedIp.contains(".")) {
+            if (!IPV4_PATTERN.matcher(trimmedIp).matches()) {
+                throw new IpValidationException("Invalid IPv4 address format", trimmedIp, "must be in format x.x.x.x where x is 0-255");
+            }
+            return;
+        }
+        
+        // Check IPv6 format
+        if (trimmedIp.contains(":")) {
+            if (!IPV6_PATTERN.matcher(trimmedIp).matches()) {
+                try {
+                    InetAddress.getByName(trimmedIp);
+                } catch (UnknownHostException e) {
+                    throw new IpValidationException("Invalid IPv6 address format", trimmedIp, "invalid IPv6 format: " + e.getMessage());
+                }
+            }
+            return;
+        }
+        
+        // Neither IPv4 nor IPv6
+        throw new IpValidationException("Invalid IP address format", trimmedIp, "must be valid IPv4 or IPv6 address");
+    }
+    
     @Override
     public String getUnknownIpDefault() {
         return UNKNOWN_IP_DEFAULT;
@@ -152,6 +313,26 @@ public class IpAddressServiceImpl implements IpAddressService {
         
         // For IPv4, return as-is after trimming
         return trimmedIp;
+    }
+    
+    @Override
+    public String extractAndSanitizeIpAddress(HttpServletRequest request) throws IpValidationException {
+        // First extract the IP address using existing logic
+        String rawIpAddress = extractClientIpAddress(request);
+        
+        // If it's the unknown default, return as-is
+        if (UNKNOWN_IP_DEFAULT.equals(rawIpAddress)) {
+            return rawIpAddress;
+        }
+        
+        // Sanitize and validate for security
+        String sanitizedIp = ipSecurityService.sanitizeIpAddress(rawIpAddress);
+        
+        // Validate secure storage requirements
+        ipSecurityService.validateSecureStorage(sanitizedIp);
+        
+        logger.debug("Successfully extracted and sanitized IP address: {} -> {}", rawIpAddress, sanitizedIp);
+        return sanitizedIp;
     }
     
     /**

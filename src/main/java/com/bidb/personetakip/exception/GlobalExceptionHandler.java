@@ -195,6 +195,120 @@ public class GlobalExceptionHandler {
     }
     
     /**
+     * Handle IP validation errors → HTTP 400
+     * Thrown when IP address format validation fails
+     */
+    @ExceptionHandler(IpValidationException.class)
+    public ResponseEntity<ErrorResponse> handleIpValidationException(
+            IpValidationException ex,
+            HttpServletRequest request) {
+        logger.warn("IP validation error: {} at {}", ex.getMessage(), request.getRequestURI());
+        
+        String detailedMessage = ex.getMessage();
+        if (ex.getInvalidIpAddress() != null && ex.getValidationReason() != null) {
+            detailedMessage = String.format("Invalid IP address '%s': %s", 
+                ex.getInvalidIpAddress(), ex.getValidationReason());
+        }
+        
+        ErrorResponse errorResponse = ErrorResponse.of(
+            HttpStatus.BAD_REQUEST.value(),
+            "Bad Request",
+            detailedMessage,
+            request.getRequestURI()
+        );
+        
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+    
+    /**
+     * Handle IP capture failures → HTTP 200 (non-blocking) or HTTP 500 (blocking)
+     * Thrown when IP address capture fails during entry/exit operations
+     */
+    @ExceptionHandler(IpCaptureException.class)
+    public ResponseEntity<ErrorResponse> handleIpCaptureException(
+            IpCaptureException ex,
+            HttpServletRequest request) {
+        
+        if (ex.shouldBlockOperation()) {
+            // Blocking failure - return 500
+            logger.error("Critical IP capture failure: {} at {}", ex.getMessage(), request.getRequestURI(), ex);
+            
+            ErrorResponse errorResponse = ErrorResponse.of(
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                "Internal Server Error",
+                "IP capture failed and operation cannot continue: " + ex.getMessage(),
+                request.getRequestURI()
+            );
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        } else {
+            // Non-blocking failure - log warning and return 200 with warning message
+            logger.warn("Non-critical IP capture failure: {} at {}", ex.getMessage(), request.getRequestURI());
+            
+            ErrorResponse errorResponse = ErrorResponse.of(
+                HttpStatus.OK.value(),
+                "Warning",
+                "Operation completed but IP capture failed: " + ex.getMessage(),
+                request.getRequestURI()
+            );
+            
+            return ResponseEntity.status(HttpStatus.OK).body(errorResponse);
+        }
+    }
+    
+    /**
+     * Handle IP assignment errors → HTTP 400
+     * Thrown when IP assignment operations fail
+     */
+    @ExceptionHandler(IpAssignmentException.class)
+    public ResponseEntity<ErrorResponse> handleIpAssignmentException(
+            IpAssignmentException ex,
+            HttpServletRequest request) {
+        logger.warn("IP assignment error: {} at {}", ex.getMessage(), request.getRequestURI());
+        
+        String detailedMessage = ex.getMessage();
+        if (ex.getAssignmentOperation() != null && ex.getUserId() != null) {
+            detailedMessage = String.format("IP assignment %s failed for user %s: %s", 
+                ex.getAssignmentOperation(), ex.getUserId(), ex.getMessage());
+        }
+        
+        ErrorResponse errorResponse = ErrorResponse.of(
+            HttpStatus.BAD_REQUEST.value(),
+            "Bad Request",
+            detailedMessage,
+            request.getRequestURI()
+        );
+        
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+    
+    /**
+     * Handle IP privacy configuration errors → HTTP 500
+     * Thrown when IP privacy configuration operations fail
+     */
+    @ExceptionHandler(IpPrivacyConfigurationException.class)
+    public ResponseEntity<ErrorResponse> handleIpPrivacyConfigurationException(
+            IpPrivacyConfigurationException ex,
+            HttpServletRequest request) {
+        logger.error("IP privacy configuration error: {} at {}", ex.getMessage(), request.getRequestURI(), ex);
+        
+        String detailedMessage = ex.getMessage();
+        if (ex.getConfigurationKey() != null && ex.getConfigurationOperation() != null) {
+            detailedMessage = String.format("IP privacy configuration %s failed for key '%s': %s", 
+                ex.getConfigurationOperation(), ex.getConfigurationKey(), ex.getMessage());
+        }
+        
+        ErrorResponse errorResponse = ErrorResponse.of(
+            HttpStatus.INTERNAL_SERVER_ERROR.value(),
+            "Internal Server Error",
+            detailedMessage,
+            request.getRequestURI()
+        );
+        
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+    }
+    
+    /**
      * Handle general Exception → HTTP 500
      * Catches all unhandled exceptions
      */

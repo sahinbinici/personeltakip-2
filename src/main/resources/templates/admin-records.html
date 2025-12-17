@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Giriş/Çıkış Kayıtları - Personel Takip Sistemi</title>
+    <title>Giriş/Çıkış Kayıtları - Gaziantep Üniversitesi Personel Takip Sistemi</title>
     <link rel="stylesheet" href="/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -12,7 +12,9 @@
         <!-- Navigation Sidebar -->
         <nav class="admin-sidebar">
             <div class="sidebar-header">
-                <h2><i class="fas fa-shield-alt"></i> Admin Panel</h2>
+                <img src="/images/gaziantep-university-logo.svg" alt="Gaziantep Üniversitesi" class="sidebar-logo">
+                <h2>Gaziantep Üniversitesi</h2>
+                <p class="sidebar-subtitle">Personel Takip Sistemi</p>
             </div>
             <ul class="sidebar-menu">
                 <li>
@@ -110,6 +112,11 @@
                 </div>
             </section>
 
+            <!-- IP Tracking Information -->
+            <div id="ipTrackingInfoSection" style="display: none;">
+                <!-- Will be populated by JavaScript -->
+            </div>
+
             <!-- Filter Section -->
             <section class="filter-section">
                 <div class="filter-container">
@@ -140,6 +147,62 @@
                             </select>
                         </div>
                         
+                        <div class="filter-group">
+                            <label for="ipAddressFilter">IP Adresi:</label>
+                            <div class="ip-filter-container">
+                                <input type="text" id="ipAddressFilter" class="filter-input" placeholder="IP adresi, aralık veya arama">
+                                <div class="ip-filter-dropdown">
+                                    <button type="button" id="ipFilterDropdownBtn" class="ip-filter-dropdown-btn" title="IP Filtre Seçenekleri">
+                                        <i class="fas fa-chevron-down"></i>
+                                    </button>
+                                    <div id="ipFilterDropdownMenu" class="ip-filter-dropdown-menu" style="display: none;">
+                                        <div class="ip-filter-option" data-filter="exact">
+                                            <i class="fas fa-equals"></i>
+                                            <span>Tam Eşleşme</span>
+                                        </div>
+                                        <div class="ip-filter-option" data-filter="range">
+                                            <i class="fas fa-network-wired"></i>
+                                            <span>IP Aralığı (192.168.1.)</span>
+                                        </div>
+                                        <div class="ip-filter-option" data-filter="subnet">
+                                            <i class="fas fa-sitemap"></i>
+                                            <span>Alt Ağ (192.168.0.0/24)</span>
+                                        </div>
+                                        <div class="ip-filter-option" data-filter="contains">
+                                            <i class="fas fa-search"></i>
+                                            <span>İçerir</span>
+                                        </div>
+                                        <div class="ip-filter-option" data-filter="unknown">
+                                            <i class="fas fa-question-circle"></i>
+                                            <span>Bilinmeyen IP</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="ip-filter-help">
+                                <small>
+                                    <i class="fas fa-info-circle"></i>
+                                    Örnekler: 192.168.1.100, 192.168.1., 192.168.0.0/24
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label for="ipMismatchFilter">IP Uyumluluk:</label>
+                            <select id="ipMismatchFilter" class="filter-input">
+                                <option value="">Tüm Kayıtlar</option>
+                                <option value="mismatch">
+                                    <i class="fas fa-exclamation-triangle"></i> Sadece Uyumsuz
+                                </option>
+                                <option value="match">
+                                    <i class="fas fa-check-circle"></i> Sadece Uyumlu
+                                </option>
+                                <option value="unknown">
+                                    <i class="fas fa-question-circle"></i> Bilinmeyen/Atanmamış
+                                </option>
+                            </select>
+                        </div>
+                        
                         <div class="filter-actions">
                             <button id="applyFiltersBtn" class="btn btn-primary">
                                 <i class="fas fa-filter"></i>
@@ -162,6 +225,10 @@
                                 <i class="fas fa-sync-alt"></i>
                                 Yenile
                             </button>
+                            <button id="advancedIpSearchBtn" class="btn btn-secondary">
+                                <i class="fas fa-search-plus"></i>
+                                Gelişmiş IP Arama
+                            </button>
                         </div>
                         
                         <div class="quick-filters">
@@ -169,6 +236,76 @@
                             <button class="quick-filter-btn" data-period="yesterday">Dün</button>
                             <button class="quick-filter-btn" data-period="week">Bu Hafta</button>
                             <button class="quick-filter-btn" data-period="month">Bu Ay</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced IP Search Panel -->
+                    <div id="advancedIpSearchPanel" class="advanced-ip-search-panel" style="display: none;">
+                        <div class="advanced-search-header">
+                            <h3><i class="fas fa-search-plus"></i> Gelişmiş IP Arama</h3>
+                            <button id="closeAdvancedSearchBtn" class="btn-close">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="advanced-search-content">
+                            <div class="search-row">
+                                <div class="search-group">
+                                    <label>IP Aralığı Başlangıç:</label>
+                                    <input type="text" id="ipRangeStart" class="search-input" placeholder="192.168.1.1">
+                                </div>
+                                <div class="search-group">
+                                    <label>IP Aralığı Bitiş:</label>
+                                    <input type="text" id="ipRangeEnd" class="search-input" placeholder="192.168.1.255">
+                                </div>
+                                <div class="search-group">
+                                    <label>Alt Ağ (CIDR):</label>
+                                    <input type="text" id="ipSubnet" class="search-input" placeholder="192.168.1.0/24">
+                                </div>
+                            </div>
+                            
+                            <div class="search-row">
+                                <div class="search-group">
+                                    <label>IP Türü:</label>
+                                    <select id="ipTypeFilter" class="search-input">
+                                        <option value="">Tümü</option>
+                                        <option value="ipv4">IPv4</option>
+                                        <option value="ipv6">IPv6</option>
+                                        <option value="unknown">Bilinmeyen</option>
+                                    </select>
+                                </div>
+                                <div class="search-group">
+                                    <label>Uyumluluk Durumu:</label>
+                                    <select id="complianceStatus" class="search-input">
+                                        <option value="">Tümü</option>
+                                        <option value="compliant">Uyumlu</option>
+                                        <option value="non-compliant">Uyumsuz</option>
+                                        <option value="no-assignment">Atama Yok</option>
+                                    </select>
+                                </div>
+                                <div class="search-group">
+                                    <label>Sık Kullanılan IP'ler:</label>
+                                    <select id="commonIpsFilter" class="search-input">
+                                        <option value="">Seçiniz</option>
+                                        <!-- Common IPs will be populated dynamically -->
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="search-actions">
+                                <button id="applyAdvancedSearchBtn" class="btn btn-primary">
+                                    <i class="fas fa-search"></i>
+                                    Gelişmiş Arama Uygula
+                                </button>
+                                <button id="clearAdvancedSearchBtn" class="btn btn-secondary">
+                                    <i class="fas fa-eraser"></i>
+                                    Temizle
+                                </button>
+                                <button id="saveSearchPresetBtn" class="btn btn-info">
+                                    <i class="fas fa-save"></i>
+                                    Arama Kaydet
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -193,6 +330,7 @@
                                 <th>Sicil No</th>
                                 <th>Departman</th>
                                 <th>Tür</th>
+                                <th>IP Adresi</th>
                                 <th>QR Kod</th>
                                 <th>GPS Koordinatları</th>
                                 <th>İşlemler</th>
@@ -200,7 +338,7 @@
                         </thead>
                         <tbody id="recordsTableBody">
                             <tr>
-                                <td colspan="8" class="loading-row">
+                                <td colspan="10" class="loading-row">
                                     <div class="loading">
                                         <i class="fas fa-spinner fa-spin"></i>
                                         Kayıtlar yükleniyor...

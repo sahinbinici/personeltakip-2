@@ -1,5 +1,6 @@
 package com.bidb.personetakip.service;
 
+import com.bidb.personetakip.config.IpTrackingConfig;
 import com.bidb.personetakip.model.IpAddressAction;
 import com.bidb.personetakip.model.IpAddressLog;
 import com.bidb.personetakip.repository.IpAddressLogRepository;
@@ -29,18 +30,22 @@ public class PrivacyCompliantIpDisplayPropertyTest {
     @Mock
     private IpAddressService ipAddressService;
     
-    private IpPrivacyServiceImpl ipPrivacyService;
+    private IpPrivacyService ipPrivacyService;
+    private IpTrackingConfigurationService configService;
     
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        ipPrivacyService = new IpPrivacyServiceImpl();
-        ReflectionTestUtils.setField(ipPrivacyService, "ipAddressLogRepository", ipAddressLogRepository);
-        ReflectionTestUtils.setField(ipPrivacyService, "ipAddressService", ipAddressService);
         
-        // Mock IpAddressService methods
+        // Create configuration service with default settings
+        configService = TestConfigurationHelper.createConfigService();
+        
+        // Create IP address service
         when(ipAddressService.getUnknownIpDefault()).thenReturn("Unknown");
         when(ipAddressService.formatIpAddress(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+        
+        // Create privacy service with mocked dependencies
+        ipPrivacyService = new IpPrivacyServiceImpl(ipAddressLogRepository, ipAddressService, configService);
     }
     
     /**
@@ -55,8 +60,8 @@ public class PrivacyCompliantIpDisplayPropertyTest {
         }
         
         // Configure privacy mode as disabled
-        ReflectionTestUtils.setField(ipPrivacyService, "privacyModeEnabled", false);
-        ReflectionTestUtils.setField(ipPrivacyService, "anonymizationLevelConfig", "NONE");
+        configService.getConfiguration().getPrivacy().setEnabled(false);
+        configService.getConfiguration().getAnonymization().setEnabled(false);
         
         // Test with respectPrivacySettings = true (should still show original since privacy is disabled)
         String result1 = ipPrivacyService.displayIpAddress(ipAddress, true);
@@ -78,9 +83,10 @@ public class PrivacyCompliantIpDisplayPropertyTest {
             return;
         }
         
-        // Configure privacy mode as enabled with PARTIAL anonymization
-        ReflectionTestUtils.setField(ipPrivacyService, "privacyModeEnabled", true);
-        ReflectionTestUtils.setField(ipPrivacyService, "anonymizationLevelConfig", "PARTIAL");
+        // Configure privacy mode as enabled with anonymization
+        configService.getConfiguration().getPrivacy().setEnabled(true);
+        configService.getConfiguration().getAnonymization().setEnabled(true);
+        configService.getConfiguration().getAnonymization().setMethod(IpTrackingConfig.AnonymizationMethod.MASK);
         
         // Test with respectPrivacySettings = true (should apply anonymization)
         String result1 = ipPrivacyService.displayIpAddress(ipAddress, true);

@@ -25,7 +25,7 @@ public class IpAddressCapturePropertyTest {
     
     @Before
     public void setUp() {
-        ipAddressService = new IpAddressServiceImpl();
+        ipAddressService = TestConfigurationHelper.createIpAddressService();
     }
     
     /**

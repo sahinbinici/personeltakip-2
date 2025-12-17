@@ -85,6 +85,12 @@ public class AdminUserDto {
     private LocalDateTime updatedAt;
     
     /**
+     * Assigned IP addresses (comma-separated string)
+     * Requirements: 3.1, 3.3 - IP assignment field availability and display
+     */
+    private String assignedIpAddresses;
+    
+    /**
      * Get full name (first + last name)
      */
     public String getFullName() {

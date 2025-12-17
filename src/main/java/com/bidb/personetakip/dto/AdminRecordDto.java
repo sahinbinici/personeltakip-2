@@ -95,6 +95,11 @@ public class AdminRecordDto {
     private String ipAddress;
     
     /**
+     * Whether there is an IP address mismatch (true = mismatch, false = match, null = no assignment or unknown)
+     */
+    private Boolean ipMismatch;
+    
+    /**
      * Timestamp when the record was created
      */
     private LocalDateTime createdAt;

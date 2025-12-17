@@ -3,6 +3,14 @@ package com.bidb.personetakip.controller;
 import com.bidb.personetakip.dto.AuthTokenDto;
 import com.bidb.personetakip.dto.LoginRequest;
 import com.bidb.personetakip.service.AuthenticationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.core.env.Environment;
@@ -19,6 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @RestController
 @RequestMapping("/api/auth")
+@Tag(name = "Authentication", description = "User authentication and authorization endpoints")
 public class AuthenticationController {
     
     private final AuthenticationService authenticationService;
@@ -46,8 +55,74 @@ public class AuthenticationController {
      * Requirements: 4.1 - Validate credentials
      *               4.3 - Return JWT token on successful authentication
      */
+    @Operation(
+        summary = "User authentication",
+        description = "Authenticates users with TC No and password, returns JWT token for web application access"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Authentication successful",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = AuthTokenDto.class),
+                examples = @ExampleObject(
+                    name = "Success Response",
+                    value = """
+                    {
+                        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                        "userId": 123,
+                        "role": "USER",
+                        "expiresAt": "2024-12-17T10:30:00Z"
+                    }
+                    """
+                )
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid credentials or validation error",
+            content = @Content(
+                mediaType = "application/json",
+                examples = {
+                    @ExampleObject(
+                        name = "Invalid Credentials",
+                        value = """
+                        {
+                            "message": "Invalid TC No or password"
+                        }
+                        """
+                    ),
+                    @ExampleObject(
+                        name = "Validation Error",
+                        value = """
+                        {
+                            "message": "TC No is required"
+                        }
+                        """
+                    )
+                }
+            )
+        ),
+        @ApiResponse(
+            responseCode = "429",
+            description = "Rate limit exceeded",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "Rate Limited",
+                    value = """
+                    {
+                        "message": "Too many login attempts. Please try again later."
+                    }
+                    """
+                )
+            )
+        )
+    })
     @PostMapping("/login")
     public ResponseEntity<?> login(
+            @Parameter(description = "Login credentials with TC No and password", required = true)
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest) {
         

@@ -3,6 +3,15 @@ package com.bidb.personetakip.controller;
 import com.bidb.personetakip.dto.AdminUserDto;
 import com.bidb.personetakip.security.JwtAuthenticationFilter;
 import com.bidb.personetakip.service.AdminUserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +30,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/users")
 @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+@Tag(name = "Admin - User Management", description = "Admin endpoints for user management, role updates, and IP assignments")
+@SecurityRequirement(name = "bearerAuth")
 public class AdminUserController {
     
     @Autowired
@@ -34,9 +45,41 @@ public class AdminUserController {
      * @return Page of AdminUserDto objects
      * Requirements: 2.1, 2.2 - Paginated user listing with user information
      */
+    @Operation(
+        summary = "Get all users",
+        description = "Retrieves a paginated list of all users in the system"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Users retrieved successfully",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = Page.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Access denied - Admin role required",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "Access Denied",
+                    value = """
+                    {
+                        "error": "Access Denied",
+                        "message": "Admin role required"
+                    }
+                    """
+                )
+            )
+        )
+    })
     @GetMapping
     public ResponseEntity<Page<AdminUserDto>> getAllUsers(
+            @Parameter(description = "Page number (0-based)", example = "0")
             @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size", example = "20")
             @RequestParam(defaultValue = "20") int size) {
         
         Page<AdminUserDto> users = adminUserService.getAllUsers(page, size);
@@ -107,9 +150,55 @@ public class AdminUserController {
      * @return Updated AdminUserDto or 404 if user not found
      * Requirements: 2.4 - Role update with audit logging
      */
+    @Operation(
+        summary = "Update user role",
+        description = "Updates the role of a specific user (NORMAL_USER, ADMIN, SUPER_ADMIN)"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "User role updated successfully",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = AdminUserDto.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid role or missing data",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "Invalid Role",
+                    value = """
+                    {
+                        "message": "Invalid role specified"
+                    }
+                    """
+                )
+            )
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "User Not Found",
+                    value = """
+                    {
+                        "message": "User not found"
+                    }
+                    """
+                )
+            )
+        )
+    })
     @PutMapping("/{userId}/role")
     public ResponseEntity<AdminUserDto> updateUserRole(
+            @Parameter(description = "User ID to update", required = true, example = "123")
             @PathVariable Long userId,
+            @Parameter(description = "Request body containing new role", required = true)
             @RequestBody Map<String, String> request,
             Authentication authentication) {
         
@@ -127,6 +216,62 @@ public class AdminUserController {
         Long adminUserId = (Long) authentication.getPrincipal();
         
         AdminUserDto updatedUser = adminUserService.updateUserRole(userId, newRole, adminUserId);
+        if (updatedUser == null) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        return ResponseEntity.ok(updatedUser);
+    }
+    
+    /**
+     * Update user IP assignment.
+     * 
+     * @param userId User ID to update
+     * @param request Request body containing IP addresses
+     * @param authentication Current admin authentication
+     * @return Updated AdminUserDto or 404 if user not found
+     * Requirements: 3.1, 3.2 - IP assignment field availability and validation
+     */
+    @PutMapping("/{userId}/ip-assignment")
+    public ResponseEntity<?> updateUserIpAssignment(
+            @PathVariable Long userId,
+            @RequestBody Map<String, String> request,
+            Authentication authentication) {
+        
+        String ipAddresses = request.get("ipAddresses");
+        
+        try {
+            // Get admin user ID from authentication
+            Long adminUserId = (Long) authentication.getPrincipal();
+            
+            AdminUserDto updatedUser = adminUserService.updateUserIpAssignment(userId, ipAddresses, adminUserId);
+            if (updatedUser == null) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            return ResponseEntity.ok(updatedUser);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    /**
+     * Remove user IP assignment.
+     * 
+     * @param userId User ID to update
+     * @param authentication Current admin authentication
+     * @return Updated AdminUserDto or 404 if user not found
+     * Requirements: 3.5 - IP assignment removal functionality
+     */
+    @DeleteMapping("/{userId}/ip-assignment")
+    public ResponseEntity<AdminUserDto> removeUserIpAssignment(
+            @PathVariable Long userId,
+            Authentication authentication) {
+        
+        // Get admin user ID from authentication
+        Long adminUserId = (Long) authentication.getPrincipal();
+        
+        AdminUserDto updatedUser = adminUserService.removeUserIpAssignment(userId, adminUserId);
         if (updatedUser == null) {
             return ResponseEntity.notFound().build();
         }

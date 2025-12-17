@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kullanıcı Yönetimi - Personel Takip Sistemi</title>
+    <title>Kullanıcı Yönetimi - Gaziantep Üniversitesi Personel Takip Sistemi</title>
     <link rel="stylesheet" href="/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -12,7 +12,9 @@
         <!-- Navigation Sidebar -->
         <nav class="admin-sidebar">
             <div class="sidebar-header">
-                <h2><i class="fas fa-shield-alt"></i> Admin Panel</h2>
+                <img src="/images/gaziantep-university-logo.svg" alt="Gaziantep Üniversitesi" class="sidebar-logo">
+                <h2>Gaziantep Üniversitesi</h2>
+                <p class="sidebar-subtitle">Personel Takip Sistemi</p>
             </div>
             <ul class="sidebar-menu">
                 <li>
@@ -162,6 +164,7 @@
                                 <th>Sicil No</th>
                                 <th>Departman</th>
                                 <th>Telefon</th>
+                                <th>Atanmış IP</th>
                                 <th>Rol</th>
                                 <th>Kayıt Tarihi</th>
                                 <th>İşlemler</th>
@@ -169,7 +172,7 @@
                         </thead>
                         <tbody id="usersTableBody">
                             <tr>
-                                <td colspan="8" class="loading-row">
+                                <td colspan="9" class="loading-row">
                                     <div class="loading">
                                         <i class="fas fa-spinner fa-spin"></i>
                                         Kullanıcılar yükleniyor...
@@ -247,6 +250,61 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeRoleChangeModal()">İptal</button>
                 <button class="btn btn-primary" onclick="confirmRoleChange()">Rol Değiştir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- IP Assignment Modal -->
+    <div id="ipAssignmentModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-network-wired"></i> IP Adresi Atama</h3>
+                <button class="modal-close" onclick="closeIpAssignmentModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="ip-assignment-info">
+                    <div class="user-info-row">
+                        <strong>Kullanıcı:</strong> <span id="ipAssignmentUserName">--</span>
+                    </div>
+                    <div class="user-info-row">
+                        <strong>Mevcut IP Adresleri:</strong> 
+                        <span id="ipAssignmentCurrentIps" class="current-ips">--</span>
+                    </div>
+                </div>
+                
+                <div class="ip-input-section">
+                    <div class="ip-input-header">
+                        <label for="ipAddressesInput">IP Adresleri:</label>
+                        <button type="button" class="ip-help-btn" onclick="showIpAssignmentHelp()" title="IP Atama Yardımı">
+                            <i class="fas fa-question-circle"></i>
+                        </button>
+                    </div>
+                    <textarea id="ipAddressesInput" 
+                              placeholder="IP adreslerini virgül veya noktalı virgül ile ayırarak girin&#10;Örnek: 192.168.1.100, 10.0.0.50&#10;IPv6 desteklenir: 2001:db8::1"
+                              rows="3"></textarea>
+                    <div class="ip-help-text">
+                        <i class="fas fa-info-circle"></i>
+                        Birden fazla IP adresi için virgül (,) veya noktalı virgül (;) kullanın. IPv4 ve IPv6 formatları desteklenir.
+                        <button type="button" class="ip-help-link" onclick="showIpAssignmentHelp()">
+                            Detaylı yardım için tıklayın
+                        </button>
+                    </div>
+                    <div id="ipValidationError" class="validation-error" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeIpAssignmentModal()">İptal</button>
+                <button class="btn btn-danger" onclick="removeIpAssignment()" id="removeIpBtn">
+                    <i class="fas fa-trash"></i> Temizle
+                </button>
+                <button class="btn btn-primary" onclick="confirmIpAssignment()">
+                    <i class="fas fa-save"></i> Kaydet
+                </button>
             </div>
         </div>
     </div>

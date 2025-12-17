@@ -161,6 +161,14 @@ public class SecurityConfig {
                     "/actuator/info"
                 ).permitAll()
                 
+                // Swagger UI endpoints - require ADMIN or SUPER_ADMIN role
+                .requestMatchers(
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/v3/api-docs/**",
+                    "/v3/api-docs.yaml"
+                ).hasAnyRole("ADMIN", "SUPER_ADMIN")
+                
                 // Protected web pages - require authentication
                 // QR code page (handled by WebController with redirect)
                 .requestMatchers(

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Personel Takip Sistemi</title>
+    <title>Admin Dashboard - Gaziantep Üniversitesi Personel Takip Sistemi</title>
     <link rel="stylesheet" href="/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -12,7 +12,9 @@
         <!-- Navigation Sidebar -->
         <nav class="admin-sidebar">
             <div class="sidebar-header">
-                <h2><i class="fas fa-shield-alt"></i> Admin Panel</h2>
+                <img src="/images/gaziantep-university-logo.svg" alt="Gaziantep Üniversitesi" class="sidebar-logo">
+                <h2>Gaziantep Üniversitesi</h2>
+                <p class="sidebar-subtitle">Personel Takip Sistemi</p>
             </div>
             <ul class="sidebar-menu">
                 <li class="active">
@@ -107,6 +109,60 @@
                     <div class="stat-content">
                         <h3 id="todayTotal">--</h3>
                         <p>Toplam Aktivite</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- IP Tracking Information Section -->
+            <section class="dashboard-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-network-wired"></i> IP Takibi Durumu</h2>
+                    <button class="refresh-btn" onclick="refreshIpTrackingInfo()">
+                        <i class="fas fa-sync-alt"></i> Yenile
+                    </button>
+                </div>
+
+                <div class="ip-tracking-info-grid">
+                    <!-- IP Tracking Status Card -->
+                    <div class="ip-info-card" id="ipTrackingStatusCard">
+                        <div class="ip-info-header">
+                            <div class="ip-info-icon" id="ipTrackingIcon">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="ip-info-content">
+                                <h3 id="ipTrackingTitle">IP Takibi</h3>
+                                <p id="ipTrackingDescription">Yükleniyor...</p>
+                            </div>
+                        </div>
+                        <div class="ip-info-status" id="ipTrackingStatus">
+                            <span class="status-text">Durum kontrol ediliyor...</span>
+                        </div>
+                    </div>
+
+                    <!-- Privacy Status Card -->
+                    <div class="ip-info-card" id="privacyStatusCard">
+                        <div class="ip-info-header">
+                            <div class="ip-info-icon" id="privacyIcon">
+                                <i class="fas fa-user-shield"></i>
+                            </div>
+                            <div class="ip-info-content">
+                                <h3 id="privacyTitle">Gizlilik Koruması</h3>
+                                <p id="privacyDescription">Yükleniyor...</p>
+                            </div>
+                        </div>
+                        <div class="ip-info-status" id="privacyStatus">
+                            <span class="status-text">Durum kontrol ediliyor...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- IP Tracking Notice -->
+                <div class="ip-tracking-notice" id="ipTrackingNotice" style="display: none;">
+                    <div class="notice-icon">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <div class="notice-content">
+                        <p id="ipTrackingNoticeText">Yükleniyor...</p>
                     </div>
                 </div>
             </section>

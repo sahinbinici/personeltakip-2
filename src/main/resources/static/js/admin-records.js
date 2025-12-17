@@ -6,7 +6,9 @@ let currentFilters = {
     startDate: null,
     endDate: null,
     userId: null,
-    departmentCode: null
+    departmentCode: null,
+    ipAddress: null,
+    ipMismatch: null
 };
 let totalPages = 0;
 let allUsers = [];
@@ -35,6 +37,31 @@ function setupEventListeners() {
     exportCsvBtn.addEventListener('click', exportCsv);
     refreshBtn.addEventListener('click', refreshRecords);
     
+    // IP Filter dropdown
+    const ipFilterDropdownBtn = document.getElementById('ipFilterDropdownBtn');
+    const ipFilterDropdownMenu = document.getElementById('ipFilterDropdownMenu');
+    
+    ipFilterDropdownBtn.addEventListener('click', toggleIpFilterDropdown);
+    
+    // IP Filter options
+    const ipFilterOptions = document.querySelectorAll('.ip-filter-option');
+    ipFilterOptions.forEach(option => {
+        option.addEventListener('click', () => selectIpFilterOption(option.dataset.filter));
+    });
+    
+    // Advanced IP Search
+    const advancedIpSearchBtn = document.getElementById('advancedIpSearchBtn');
+    const closeAdvancedSearchBtn = document.getElementById('closeAdvancedSearchBtn');
+    const applyAdvancedSearchBtn = document.getElementById('applyAdvancedSearchBtn');
+    const clearAdvancedSearchBtn = document.getElementById('clearAdvancedSearchBtn');
+    const saveSearchPresetBtn = document.getElementById('saveSearchPresetBtn');
+    
+    advancedIpSearchBtn.addEventListener('click', toggleAdvancedIpSearch);
+    closeAdvancedSearchBtn.addEventListener('click', closeAdvancedIpSearch);
+    applyAdvancedSearchBtn.addEventListener('click', applyAdvancedIpSearch);
+    clearAdvancedSearchBtn.addEventListener('click', clearAdvancedIpSearch);
+    saveSearchPresetBtn.addEventListener('click', saveSearchPreset);
+    
     // Quick filter buttons
     const quickFilterBtns = document.querySelectorAll('.quick-filter-btn');
     quickFilterBtns.forEach(btn => {
@@ -47,6 +74,13 @@ function setupEventListeners() {
     
     prevPageBtn.addEventListener('click', () => changePage(currentPage - 1));
     nextPageBtn.addEventListener('click', () => changePage(currentPage + 1));
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest('.ip-filter-container')) {
+            closeIpFilterDropdown();
+        }
+    });
 }
 
 // Set default dates (last 7 days)
@@ -171,7 +205,8 @@ async function loadRecords() {
         });
         
         // Add filters if any are set
-        if (currentFilters.startDate || currentFilters.endDate || currentFilters.userId || currentFilters.departmentCode) {
+        if (currentFilters.startDate || currentFilters.endDate || currentFilters.userId || 
+            currentFilters.departmentCode || currentFilters.ipAddress || currentFilters.ipMismatch) {
             url = '/api/admin/records/filter';
             
             if (currentFilters.startDate) {
@@ -185,6 +220,12 @@ async function loadRecords() {
             }
             if (currentFilters.departmentCode) {
                 params.append('departmentCode', currentFilters.departmentCode);
+            }
+            if (currentFilters.ipAddress) {
+                params.append('ipAddress', currentFilters.ipAddress);
+            }
+            if (currentFilters.ipMismatch) {
+                params.append('ipMismatch', currentFilters.ipMismatch);
             }
         }
         
@@ -215,7 +256,7 @@ function displayRecords(data) {
     if (!data.content || data.content.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" class="no-data">
+                <td colspan="10" class="no-data">
                     <div class="no-data-message">
                         <i class="fas fa-clipboard-list"></i>
                         <p>Kayıt bulunamadı</p>
@@ -235,8 +276,11 @@ function displayRecords(data) {
         
         const departmentName = record.userDepartmentName || record.userDepartmentCode || '--';
         
+        // Format IP address with mismatch highlighting
+        const ipAddressHtml = formatIpAddressDisplay(record);
+        
         return `
-            <tr>
+            <tr ${record.ipMismatch ? 'class="ip-mismatch-row"' : ''}>
                 <td>${timestamp}</td>
                 <td>${record.userTcNo || 'Bilinmeyen'}</td>
                 <td>${record.userFullName || 'Bilinmeyen Kullanıcı'}</td>
@@ -245,6 +289,7 @@ function displayRecords(data) {
                 <td>
                     <span class="type-badge type-${record.type.toLowerCase()}">${record.typeDisplayName}</span>
                 </td>
+                <td class="ip-address-cell">${ipAddressHtml}</td>
                 <td class="qr-code-cell">${record.qrCodeValue}</td>
                 <td class="gps-cell">${gpsInfo}</td>
                 <td>
@@ -331,12 +376,16 @@ function applyFilters() {
     const endDate = document.getElementById('endDate').value;
     const userId = document.getElementById('userSelect').value;
     const departmentCode = document.getElementById('departmentSelect').value;
+    const ipAddress = document.getElementById('ipAddressFilter').value;
+    const ipMismatch = document.getElementById('ipMismatchFilter').value;
     
     currentFilters = {
         startDate: startDate || null,
         endDate: endDate || null,
         userId: userId || null,
-        departmentCode: departmentCode || null
+        departmentCode: departmentCode || null,
+        ipAddress: ipAddress || null,
+        ipMismatch: ipMismatch || null
     };
     
     currentPage = 0;
@@ -352,12 +401,16 @@ function clearFilters() {
     document.getElementById('endDate').value = '';
     document.getElementById('userSelect').value = '';
     document.getElementById('departmentSelect').value = '';
+    document.getElementById('ipAddressFilter').value = '';
+    document.getElementById('ipMismatchFilter').value = '';
     
     currentFilters = {
         startDate: null,
         endDate: null,
         userId: null,
-        departmentCode: null
+        departmentCode: null,
+        ipAddress: null,
+        ipMismatch: null
     };
     
     currentPage = 0;
@@ -423,6 +476,12 @@ async function exportCsv() {
         }
         if (currentFilters.departmentCode) {
             params.append('departmentCode', currentFilters.departmentCode);
+        }
+        if (currentFilters.ipAddress) {
+            params.append('ipAddress', currentFilters.ipAddress);
+        }
+        if (currentFilters.ipMismatch) {
+            params.append('ipMismatch', currentFilters.ipMismatch);
         }
         
         if (params.toString()) {
@@ -552,3 +611,610 @@ function hideSuccess() {
         successAlert.style.display = 'none';
     }
 }
+
+// Format IP address display with mismatch highlighting
+function formatIpAddressDisplay(record) {
+    let ipAddress = record.ipAddress;
+    let displayHtml = '';
+    
+    // Handle unknown IP addresses
+    if (!ipAddress || ipAddress === 'Unknown' || ipAddress === 'N/A' || ipAddress.trim() === '') {
+        displayHtml = '<span class="ip-unknown">Bilinmeyen</span>';
+    } else {
+        // Format IPv4 and IPv6 addresses
+        const formattedIp = formatIpAddress(ipAddress);
+        
+        // Check for IP mismatch and add appropriate styling
+        if (record.ipMismatch === true) {
+            displayHtml = `<span class="ip-mismatch" title="IP adresi uyumsuzluğu tespit edildi">
+                            <i class="fas fa-exclamation-triangle"></i> ${formattedIp}
+                           </span>`;
+        } else if (record.ipMismatch === false) {
+            displayHtml = `<span class="ip-match" title="IP adresi uyumlu">
+                            <i class="fas fa-check-circle"></i> ${formattedIp}
+                           </span>`;
+        } else {
+            // No assignment or unknown status
+            displayHtml = `<span class="ip-normal">${formattedIp}</span>`;
+        }
+    }
+    
+    return displayHtml;
+}
+
+// Format IP address for display (IPv4 and IPv6)
+function formatIpAddress(ipAddress) {
+    if (!ipAddress || ipAddress.trim() === '') {
+        return 'Bilinmeyen';
+    }
+    
+    const trimmedIp = ipAddress.trim();
+    
+    // IPv4 formatting - return as-is for readability
+    if (isIPv4(trimmedIp)) {
+        return trimmedIp;
+    }
+    
+    // IPv6 formatting - ensure lowercase for consistency
+    if (isIPv6(trimmedIp)) {
+        return trimmedIp.toLowerCase();
+    }
+    
+    // Unknown format - return as-is
+    return trimmedIp;
+}
+
+// Check if IP address is IPv4 format
+function isIPv4(ip) {
+    const ipv4Regex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    return ipv4Regex.test(ip);
+}
+
+// Check if IP address is IPv6 format
+function isIPv6(ip) {
+    // Simple check for IPv6 - contains colons and valid hex characters
+    return ip.includes(':') && /^[0-9a-fA-F:]+$/.test(ip);
+}
+
+// Show IP address details in a tooltip or modal
+function showIpAddressDetails(ipAddress, assignedIps, mismatchStatus) {
+    let message = `IP Adresi: ${ipAddress}\n`;
+    
+    if (assignedIps && assignedIps.length > 0) {
+        message += `Atanmış IP'ler: ${assignedIps.join(', ')}\n`;
+        message += `Durum: ${mismatchStatus ? 'Uyumsuz' : 'Uyumlu'}`;
+    } else {
+        message += 'Atanmış IP adresi bulunmuyor';
+    }
+    
+    alert(message);
+}
+
+// IP Filter Dropdown Functions
+function toggleIpFilterDropdown() {
+    const dropdown = document.getElementById('ipFilterDropdownMenu');
+    const isVisible = dropdown.style.display !== 'none';
+    
+    if (isVisible) {
+        closeIpFilterDropdown();
+    } else {
+        dropdown.style.display = 'block';
+    }
+}
+
+function closeIpFilterDropdown() {
+    const dropdown = document.getElementById('ipFilterDropdownMenu');
+    dropdown.style.display = 'none';
+}
+
+function selectIpFilterOption(filterType) {
+    const ipAddressFilter = document.getElementById('ipAddressFilter');
+    
+    switch (filterType) {
+        case 'exact':
+            ipAddressFilter.placeholder = 'Tam IP adresi (192.168.1.100)';
+            break;
+        case 'range':
+            ipAddressFilter.placeholder = 'IP aralığı (192.168.1.)';
+            break;
+        case 'subnet':
+            ipAddressFilter.placeholder = 'Alt ağ (192.168.0.0/24)';
+            break;
+        case 'contains':
+            ipAddressFilter.placeholder = 'İçeren metin';
+            break;
+        case 'unknown':
+            ipAddressFilter.value = 'unknown';
+            ipAddressFilter.placeholder = 'Bilinmeyen IP adresleri';
+            break;
+    }
+    
+    closeIpFilterDropdown();
+    ipAddressFilter.focus();
+}
+
+// Advanced IP Search Functions
+function toggleAdvancedIpSearch() {
+    const panel = document.getElementById('advancedIpSearchPanel');
+    const isVisible = panel.style.display !== 'none';
+    
+    if (isVisible) {
+        closeAdvancedIpSearch();
+    } else {
+        panel.style.display = 'block';
+        loadCommonIps();
+        loadIpStatistics();
+    }
+}
+
+function closeAdvancedIpSearch() {
+    const panel = document.getElementById('advancedIpSearchPanel');
+    panel.style.display = 'none';
+}
+
+function applyAdvancedIpSearch() {
+    const ipRangeStart = document.getElementById('ipRangeStart').value;
+    const ipRangeEnd = document.getElementById('ipRangeEnd').value;
+    const ipSubnet = document.getElementById('ipSubnet').value;
+    const ipTypeFilter = document.getElementById('ipTypeFilter').value;
+    const complianceStatus = document.getElementById('complianceStatus').value;
+    const commonIpsFilter = document.getElementById('commonIpsFilter').value;
+    
+    // Build advanced IP filter string
+    let advancedFilter = '';
+    
+    if (ipRangeStart && ipRangeEnd) {
+        advancedFilter = `range:${ipRangeStart}-${ipRangeEnd}`;
+    } else if (ipSubnet) {
+        advancedFilter = `subnet:${ipSubnet}`;
+    } else if (commonIpsFilter) {
+        advancedFilter = commonIpsFilter;
+    }
+    
+    // Apply the advanced filter
+    if (advancedFilter) {
+        document.getElementById('ipAddressFilter').value = advancedFilter;
+    }
+    
+    // Apply compliance status filter
+    if (complianceStatus) {
+        const ipMismatchFilter = document.getElementById('ipMismatchFilter');
+        switch (complianceStatus) {
+            case 'compliant':
+                ipMismatchFilter.value = 'match';
+                break;
+            case 'non-compliant':
+                ipMismatchFilter.value = 'mismatch';
+                break;
+            case 'no-assignment':
+                ipMismatchFilter.value = 'unknown';
+                break;
+        }
+    }
+    
+    // Apply filters and close advanced search
+    applyFilters();
+    closeAdvancedIpSearch();
+    
+    showSuccess('Gelişmiş IP arama filtreleri uygulandı');
+}
+
+function clearAdvancedIpSearch() {
+    document.getElementById('ipRangeStart').value = '';
+    document.getElementById('ipRangeEnd').value = '';
+    document.getElementById('ipSubnet').value = '';
+    document.getElementById('ipTypeFilter').value = '';
+    document.getElementById('complianceStatus').value = '';
+    document.getElementById('commonIpsFilter').value = '';
+}
+
+function saveSearchPreset() {
+    const presetName = prompt('Arama ön ayarı için bir isim girin:');
+    if (!presetName) return;
+    
+    const preset = {
+        name: presetName,
+        ipRangeStart: document.getElementById('ipRangeStart').value,
+        ipRangeEnd: document.getElementById('ipRangeEnd').value,
+        ipSubnet: document.getElementById('ipSubnet').value,
+        ipTypeFilter: document.getElementById('ipTypeFilter').value,
+        complianceStatus: document.getElementById('complianceStatus').value,
+        commonIpsFilter: document.getElementById('commonIpsFilter').value
+    };
+    
+    // Save to localStorage
+    let presets = JSON.parse(localStorage.getItem('ipSearchPresets') || '[]');
+    presets.push(preset);
+    localStorage.setItem('ipSearchPresets', JSON.stringify(presets));
+    
+    showSuccess(`Arama ön ayarı "${presetName}" kaydedildi`);
+}
+
+// Load common IP addresses for quick selection
+async function loadCommonIps() {
+    try {
+        // This would typically come from an API endpoint
+        // For now, we'll use a placeholder implementation
+        const commonIpsSelect = document.getElementById('commonIpsFilter');
+        
+        // Clear existing options except the first one
+        while (commonIpsSelect.children.length > 1) {
+            commonIpsSelect.removeChild(commonIpsSelect.lastChild);
+        }
+        
+        // Add some common IP ranges (this could be loaded from API)
+        const commonIps = [
+            { value: '192.168.1.', label: '192.168.1.x (Yerel Ağ 1)' },
+            { value: '192.168.0.', label: '192.168.0.x (Yerel Ağ 2)' },
+            { value: '10.0.0.', label: '10.0.0.x (Kurumsal Ağ)' },
+            { value: '172.16.', label: '172.16.x.x (Özel Ağ)' },
+            { value: 'unknown', label: 'Bilinmeyen IP Adresleri' }
+        ];
+        
+        commonIps.forEach(ip => {
+            const option = document.createElement('option');
+            option.value = ip.value;
+            option.textContent = ip.label;
+            commonIpsSelect.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('Error loading common IPs:', error);
+    }
+}
+
+// Load IP statistics for advanced search
+async function loadIpStatistics() {
+    try {
+        const response = await makeAuthenticatedRequest('/api/admin/records/ip-statistics');
+        
+        if (!response) return;
+        
+        if (response.ok) {
+            const stats = await response.json();
+            displayIpStatistics(stats);
+        } else {
+            console.error('Failed to load IP statistics');
+        }
+    } catch (error) {
+        console.error('Error loading IP statistics:', error);
+    }
+}
+
+// Display IP statistics in the advanced search panel
+function displayIpStatistics(stats) {
+    // Create or update statistics display
+    let statsContainer = document.querySelector('.ip-stats-grid');
+    if (!statsContainer) {
+        statsContainer = document.createElement('div');
+        statsContainer.className = 'ip-stats-grid';
+        
+        const searchContent = document.querySelector('.advanced-search-content');
+        searchContent.insertBefore(statsContainer, searchContent.firstChild);
+    }
+    
+    statsContainer.innerHTML = `
+        <div class="ip-stat-item">
+            <span class="stat-number">${stats.totalWithIp || 0}</span>
+            <span class="stat-label">IP'li Kayıt</span>
+        </div>
+        <div class="ip-stat-item">
+            <span class="stat-number">${stats.ipv4Count || 0}</span>
+            <span class="stat-label">IPv4</span>
+        </div>
+        <div class="ip-stat-item">
+            <span class="stat-number">${stats.ipv6Count || 0}</span>
+            <span class="stat-label">IPv6</span>
+        </div>
+        <div class="ip-stat-item">
+            <span class="stat-number">${stats.mismatchCount || 0}</span>
+            <span class="stat-label">Uyumsuz</span>
+        </div>
+        <div class="ip-stat-item">
+            <span class="stat-number">${stats.matchCount || 0}</span>
+            <span class="stat-label">Uyumlu</span>
+        </div>
+        <div class="ip-stat-item">
+            <span class="stat-number">${stats.totalWithoutIp || 0}</span>
+            <span class="stat-label">IP'siz</span>
+        </div>
+    `;
+    
+    // Update common IPs dropdown with actual data
+    updateCommonIpsDropdown(stats.commonIps || []);
+}
+
+// Update common IPs dropdown with real data
+function updateCommonIpsDropdown(commonIps) {
+    const commonIpsSelect = document.getElementById('commonIpsFilter');
+    
+    // Clear existing options except the first one
+    while (commonIpsSelect.children.length > 1) {
+        commonIpsSelect.removeChild(commonIpsSelect.lastChild);
+    }
+    
+    // Add common IPs from statistics
+    commonIps.forEach(ipInfo => {
+        const option = document.createElement('option');
+        option.value = ipInfo.ipAddress;
+        option.textContent = `${ipInfo.ipAddress} (${ipInfo.count} kayıt, ${ipInfo.type})`;
+        commonIpsSelect.appendChild(option);
+    });
+    
+    // Add some predefined ranges
+    const predefinedRanges = [
+        { value: '192.168.1.', label: '192.168.1.x (Yerel Ağ 1)' },
+        { value: '192.168.0.', label: '192.168.0.x (Yerel Ağ 2)' },
+        { value: '10.0.0.', label: '10.0.0.x (Kurumsal Ağ)' },
+        { value: '172.16.', label: '172.16.x.x (Özel Ağ)' },
+        { value: 'unknown', label: 'Bilinmeyen IP Adresleri' }
+    ];
+    
+    predefinedRanges.forEach(range => {
+        const option = document.createElement('option');
+        option.value = range.value;
+        option.textContent = range.label;
+        commonIpsSelect.appendChild(option);
+    });
+}
+
+// Enhanced IP address validation
+function validateIpAddress(ip) {
+    if (!ip || ip.trim() === '') return false;
+    
+    // Check for special filters
+    if (ip === 'unknown' || ip.startsWith('range:') || ip.startsWith('subnet:')) {
+        return true;
+    }
+    
+    // IPv4 validation
+    const ipv4Regex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    if (ipv4Regex.test(ip)) return true;
+    
+    // IPv4 range validation (e.g., 192.168.1.)
+    const ipv4RangeRegex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){1,3}$/;
+    if (ipv4RangeRegex.test(ip)) return true;
+    
+    // CIDR notation validation
+    const cidrRegex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/([0-9]|[1-2][0-9]|3[0-2])$/;
+    if (cidrRegex.test(ip)) return true;
+    
+    // IPv6 validation (basic)
+    const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
+    if (ipv6Regex.test(ip)) return true;
+    
+    return false;
+}
+
+// Enhanced IP address formatting with type detection
+function formatIpAddressWithType(ipAddress) {
+    if (!ipAddress || ipAddress === 'Unknown' || ipAddress === 'N/A' || ipAddress.trim() === '') {
+        return '<span class="ip-unknown">Bilinmeyen</span>';
+    }
+    
+    const trimmedIp = ipAddress.trim();
+    let typeClass = 'ip-normal';
+    let typeIcon = '';
+    
+    if (isIPv4(trimmedIp)) {
+        typeClass = 'ipv4-address';
+        typeIcon = '<i class="fas fa-network-wired" title="IPv4"></i> ';
+    } else if (isIPv6(trimmedIp)) {
+        typeClass = 'ipv6-address';
+        typeIcon = '<i class="fas fa-project-diagram" title="IPv6"></i> ';
+    }
+    
+    return `<span class="${typeClass}">${typeIcon}${trimmedIp}</span>`;
+}
+
+// IP address search and highlighting
+function highlightIpMatches(ipAddress, searchTerm) {
+    if (!searchTerm || !ipAddress) return ipAddress;
+    
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return ipAddress.replace(regex, '<mark>$1</mark>');
+}
+// IP Tracking Information Functions for Records Page
+
+// Add IP tracking information section to records page
+function addIpTrackingInfoSection() {
+    const section = document.getElementById('ipTrackingInfoSection');
+    if (!section) return;
+    
+    // Load IP tracking info and display
+    makeAuthenticatedRequest('/api/admin/dashboard/ip-tracking/info')
+        .then(response => response.json())
+        .then(info => {
+            if (info.enabled) {
+                section.innerHTML = `
+                    <section class="dashboard-section">
+                        <div class="section-header">
+                            <h2><i class="fas fa-network-wired"></i> IP Takibi Bilgileri</h2>
+                            <button class="btn btn-secondary" onclick="showIpAssignmentHelp()">
+                                <i class="fas fa-question-circle"></i> Yardım
+                            </button>
+                        </div>
+                        
+                        <div class="ip-tracking-info-grid">
+                            <div class="ip-info-card">
+                                <div class="ip-info-header">
+                                    <div class="ip-info-icon success">
+                                        <i class="fas fa-shield-alt"></i>
+                                    </div>
+                                    <div class="ip-info-content">
+                                        <h3>IP Takibi Aktif</h3>
+                                        <p>Giriş/çıkış kayıtlarında IP adresleri görüntüleniyor</p>
+                                    </div>
+                                </div>
+                                <div class="ip-info-status success">
+                                    <span class="status-text">${info.statusDisplay}</span>
+                                </div>
+                            </div>
+                            
+                            ${info.privacyEnabled ? `
+                                <div class="ip-info-card">
+                                    <div class="ip-info-header">
+                                        <div class="ip-info-icon info">
+                                            <i class="fas fa-user-shield"></i>
+                                        </div>
+                                        <div class="ip-info-content">
+                                            <h3>Gizlilik Koruması</h3>
+                                            <p>IP adresleri gizlilik ayarlarına uygun görüntüleniyor</p>
+                                        </div>
+                                    </div>
+                                    <div class="ip-info-status info">
+                                        <span class="status-text">${info.privacyInfo}</span>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                        
+                        ${info.notice ? `
+                            <div class="ip-tracking-notice">
+                                <div class="notice-icon">
+                                    <i class="fas fa-info-circle"></i>
+                                </div>
+                                <div class="notice-content">
+                                    <p>${info.notice}</p>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </section>
+                `;
+                section.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('Failed to load IP tracking info:', error);
+        });
+}
+
+// Show IP assignment help modal (reuse from admin-users.js)
+async function showIpAssignmentHelp() {
+    try {
+        const response = await makeAuthenticatedRequest('/api/admin/dashboard/ip-tracking/info');
+        
+        if (response && response.ok) {
+            const info = await response.json();
+            showIpHelpModal(info.helpText, info);
+        } else {
+            showIpHelpModal('IP adresi takibi yardımı yüklenemedi.', null);
+        }
+    } catch (error) {
+        console.error('Failed to load IP tracking info:', error);
+        showIpHelpModal('IP adresi takibi yardımı yüklenemedi.', null);
+    }
+}
+
+// Show IP help modal for records page
+function showIpHelpModal(helpText, ipInfo) {
+    const modal = document.createElement('div');
+    modal.className = 'ip-help-modal';
+    
+    const statusSection = ipInfo ? `
+        <div class="ip-help-section">
+            <h4><i class="fas fa-info-circle"></i> IP Takibi Durumu</h4>
+            <div class="ip-tracking-status-indicator ${ipInfo.enabled ? 'enabled' : 'disabled'}">
+                <i class="fas ${ipInfo.enabled ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                ${ipInfo.statusDisplay}
+            </div>
+            ${ipInfo.privacyEnabled ? `
+                <div class="ip-tracking-status-indicator privacy">
+                    <i class="fas fa-user-shield"></i>
+                    Gizlilik koruması aktif - IP adresleri maskelenebilir
+                </div>
+            ` : ''}
+        </div>
+    ` : '';
+    
+    modal.innerHTML = `
+        <div class="ip-help-modal-content">
+            <div class="ip-help-modal-header">
+                <h3><i class="fas fa-network-wired"></i> IP Takibi Bilgileri</h3>
+                <button class="modal-close" onclick="closeIpHelpModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="ip-help-modal-body">
+                ${statusSection}
+                
+                <div class="ip-help-section">
+                    <h4><i class="fas fa-question-circle"></i> IP Takibi Nedir?</h4>
+                    <p>IP takibi, giriş/çıkış işlemlerinin hangi IP adresinden yapıldığını kaydetme özelliğidir. Bu sayede:</p>
+                    <ul class="ip-help-list">
+                        <li><i class="fas fa-check"></i> Hangi cihazlardan erişim yapıldığını görebilirsiniz</li>
+                        <li><i class="fas fa-check"></i> Güvenlik kontrolü yapabilirsiniz</li>
+                        <li><i class="fas fa-check"></i> Kullanıcı davranışlarını analiz edebilirsiniz</li>
+                        <li><i class="fas fa-check"></i> IP uyumluluk raporları oluşturabilirsiniz</li>
+                    </ul>
+                </div>
+                
+                <div class="ip-help-section">
+                    <h4><i class="fas fa-filter"></i> IP Filtreleme</h4>
+                    <p>Kayıtları IP adresine göre filtreleyebilirsiniz:</p>
+                    <div class="ip-help-examples">
+                        <p><strong>Tam eşleşme:</strong> <code>192.168.1.100</code></p>
+                        <p><strong>IP aralığı:</strong> <code>192.168.1.</code> (192.168.1.x tüm IP'ler)</p>
+                        <p><strong>Alt ağ:</strong> <code>192.168.0.0/24</code></p>
+                        <p><strong>Bilinmeyen IP'ler:</strong> "Bilinmeyen IP" filtresini kullanın</p>
+                    </div>
+                </div>
+                
+                <div class="ip-help-section">
+                    <h4><i class="fas fa-exclamation-triangle"></i> IP Uyumluluk</h4>
+                    <p>Kullanıcılara atanan IP adresleri ile gerçek IP adresleri karşılaştırılır:</p>
+                    <ul class="ip-help-list">
+                        <li><i class="fas fa-check-circle" style="color: var(--success-color);"></i> <strong>Uyumlu:</strong> Kullanıcı atanan IP'den erişim yaptı</li>
+                        <li><i class="fas fa-exclamation-triangle" style="color: var(--warning-color);"></i> <strong>Uyumsuz:</strong> Kullanıcı farklı IP'den erişim yaptı</li>
+                        <li><i class="fas fa-question-circle" style="color: var(--info-color);"></i> <strong>Bilinmeyen:</strong> Kullanıcıya IP atanmamış</li>
+                    </ul>
+                </div>
+                
+                ${ipInfo && ipInfo.privacyEnabled ? `
+                    <div class="ip-help-section">
+                        <h4><i class="fas fa-user-shield"></i> Gizlilik Koruması</h4>
+                        <p>Gizlilik koruması aktif olduğunda:</p>
+                        <ul class="ip-help-list">
+                            <li><i class="fas fa-info"></i> IP adresleri kısmen maskelenebilir</li>
+                            <li><i class="fas fa-info"></i> Raporlarda IP adresleri anonimleştirilebilir</li>
+                            <li><i class="fas fa-info"></i> Erişim logları güvenli şekilde tutulur</li>
+                        </ul>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close modal when clicking outside
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeIpHelpModal();
+        }
+    });
+    
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeIpHelpModal();
+        }
+    });
+}
+
+// Close IP help modal
+function closeIpHelpModal() {
+    const modal = document.querySelector('.ip-help-modal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Remove escape key listener
+    document.removeEventListener('keydown', closeIpHelpModal);
+}
+
+// Initialize IP tracking information display for records page
+document.addEventListener('DOMContentLoaded', function() {
+    // Add IP tracking info section after a short delay
+    setTimeout(addIpTrackingInfoSection, 500);
+});

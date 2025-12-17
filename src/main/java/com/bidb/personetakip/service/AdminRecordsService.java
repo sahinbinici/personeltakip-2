@@ -6,6 +6,8 @@ import com.bidb.personetakip.model.EntryExitType;
 import com.bidb.personetakip.model.User;
 import com.bidb.personetakip.repository.EntryExitRecordRepository;
 import com.bidb.personetakip.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -32,6 +34,8 @@ import java.util.stream.Collectors;
 @Service
 public class AdminRecordsService {
     
+    private static final Logger logger = LoggerFactory.getLogger(AdminRecordsService.class);
+    
     @Autowired
     private EntryExitRecordRepository entryExitRecordRepository;
     
@@ -40,6 +44,9 @@ public class AdminRecordsService {
     
     @Autowired
     private IpComplianceService ipComplianceService;
+    
+    @Autowired
+    private IpPrivacyService ipPrivacyService;
     
     /**
      * Get paginated list of all entry/exit records.
@@ -98,12 +105,13 @@ public class AdminRecordsService {
      * @param userId User ID (optional)
      * @param departmentCode Department code (optional)
      * @param ipAddress IP address filter (optional)
+     * @param ipMismatch IP mismatch filter (optional: "mismatch", "match", "unknown")
      * @param page Page number (0-based)
      * @param size Page size
      * @return Page of AdminRecordDto objects matching filters
      */
     public Page<AdminRecordDto> getRecordsWithFilters(LocalDate startDate, LocalDate endDate, 
-                                                     Long userId, String departmentCode, String ipAddress, int page, int size) {
+                                                     Long userId, String departmentCode, String ipAddress, String ipMismatch, int page, int size) {
         List<EntryExitRecord> allRecords = entryExitRecordRepository.findAll();
         
         // Apply filters
@@ -156,6 +164,36 @@ public class AdminRecordsService {
                                     return false;
                                 }
                             }
+                        }
+                    }
+                    
+                    // IP mismatch filter
+                    if (ipMismatch != null && !ipMismatch.isEmpty()) {
+                        Optional<User> userOpt = userRepository.findById(record.getUserId());
+                        if (userOpt.isPresent()) {
+                            IpComplianceService.IpComplianceStatus status = ipComplianceService.getIpComplianceStatus(record, userOpt.get());
+                            
+                            switch (ipMismatch.toLowerCase()) {
+                                case "mismatch":
+                                    if (status != IpComplianceService.IpComplianceStatus.MISMATCH) {
+                                        return false;
+                                    }
+                                    break;
+                                case "match":
+                                    if (status != IpComplianceService.IpComplianceStatus.MATCH) {
+                                        return false;
+                                    }
+                                    break;
+                                case "unknown":
+                                    if (status != IpComplianceService.IpComplianceStatus.UNKNOWN_IP && 
+                                        status != IpComplianceService.IpComplianceStatus.NO_ASSIGNMENT) {
+                                        return false;
+                                    }
+                                    break;
+                            }
+                        } else if (!"unknown".equalsIgnoreCase(ipMismatch)) {
+                            // If user not found and not filtering for unknown, exclude this record
+                            return false;
                         }
                     }
                     
@@ -216,10 +254,11 @@ public class AdminRecordsService {
      * @param userId User ID (optional)
      * @param departmentCode Department code (optional)
      * @param ipAddress IP address filter (optional)
+     * @param ipMismatch IP mismatch filter (optional)
      * @return CSV content as string
      * Requirements: 3.5 - CSV export functionality
      */
-    public String generateCsvExport(LocalDate startDate, LocalDate endDate, Long userId, String departmentCode, String ipAddress) {
+    public String generateCsvExport(LocalDate startDate, LocalDate endDate, Long userId, String departmentCode, String ipAddress, String ipMismatch) {
         List<EntryExitRecord> records = entryExitRecordRepository.findAll();
         
         // Apply filters
@@ -275,6 +314,36 @@ public class AdminRecordsService {
                         }
                     }
                     
+                    // IP mismatch filter
+                    if (ipMismatch != null && !ipMismatch.isEmpty()) {
+                        Optional<User> userOpt = userRepository.findById(record.getUserId());
+                        if (userOpt.isPresent()) {
+                            IpComplianceService.IpComplianceStatus status = ipComplianceService.getIpComplianceStatus(record, userOpt.get());
+                            
+                            switch (ipMismatch.toLowerCase()) {
+                                case "mismatch":
+                                    if (status != IpComplianceService.IpComplianceStatus.MISMATCH) {
+                                        return false;
+                                    }
+                                    break;
+                                case "match":
+                                    if (status != IpComplianceService.IpComplianceStatus.MATCH) {
+                                        return false;
+                                    }
+                                    break;
+                                case "unknown":
+                                    if (status != IpComplianceService.IpComplianceStatus.UNKNOWN_IP && 
+                                        status != IpComplianceService.IpComplianceStatus.NO_ASSIGNMENT) {
+                                        return false;
+                                    }
+                                    break;
+                            }
+                        } else if (!"unknown".equalsIgnoreCase(ipMismatch)) {
+                            // If user not found and not filtering for unknown, exclude this record
+                            return false;
+                        }
+                    }
+                    
                     return true;
                 })
                 .sorted((r1, r2) -> r2.getTimestamp().compareTo(r1.getTimestamp()))
@@ -282,8 +351,8 @@ public class AdminRecordsService {
         
         StringBuilder csv = new StringBuilder();
         
-        // CSV Header
-        csv.append("Tarih,Saat,TC Kimlik No,Ad Soyad,Sicil No,Departman,Tür,QR Kod,IP Adresi,Enlem,Boylam\n");
+        // CSV Header - Enhanced with IP compliance information
+        csv.append("Tarih,Saat,TC Kimlik No,Ad Soyad,Sicil No,Departman,Tür,QR Kod,IP Adresi,IP Uyumluluk,IP Mismatch,Atanmış IP'ler,Enlem,Boylam\n");
         
         // CSV Data
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
@@ -291,6 +360,63 @@ public class AdminRecordsService {
         
         for (EntryExitRecord record : filteredRecords) {
             AdminRecordDto dto = convertToAdminRecordDto(record);
+            Optional<User> userOpt = userRepository.findById(record.getUserId());
+            
+            // Get IP compliance information
+            String ipComplianceStatus = "Bilinmiyor";
+            String ipMismatchIndicator = "Hayır";
+            String assignedIps = "";
+            
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                IpComplianceService.IpComplianceStatus status = ipComplianceService.getIpComplianceStatus(record, user);
+                
+                // Set compliance status in Turkish
+                switch (status) {
+                    case MATCH:
+                        ipComplianceStatus = "Uyumlu";
+                        ipMismatchIndicator = "Hayır";
+                        break;
+                    case MISMATCH:
+                        ipComplianceStatus = "Uyumsuz";
+                        ipMismatchIndicator = "Evet";
+                        break;
+                    case NO_ASSIGNMENT:
+                        ipComplianceStatus = "Atama Yok";
+                        ipMismatchIndicator = "Hayır";
+                        break;
+                    case UNKNOWN_IP:
+                        ipComplianceStatus = "IP Bilinmiyor";
+                        ipMismatchIndicator = "Hayır";
+                        break;
+                }
+                
+                // Get assigned IPs (anonymized if configured)
+                if (user.getAssignedIpAddresses() != null && !user.getAssignedIpAddresses().trim().isEmpty()) {
+                    List<String> assignedIpList = ipComplianceService.parseAssignedIpAddresses(user.getAssignedIpAddresses());
+                    StringBuilder assignedIpsBuilder = new StringBuilder();
+                    for (int i = 0; i < assignedIpList.size(); i++) {
+                        if (i > 0) assignedIpsBuilder.append("; ");
+                        // Apply anonymization if configured
+                        String displayIp = ipPrivacyService.displayIpAddress(assignedIpList.get(i), true);
+                        assignedIpsBuilder.append(displayIp);
+                    }
+                    assignedIps = assignedIpsBuilder.toString();
+                }
+            }
+            
+            // Get IP address for export (anonymized if configured)
+            String exportIpAddress = "Bilinmiyor";
+            if (record.getIpAddress() != null) {
+                exportIpAddress = ipPrivacyService.displayIpAddress(record.getIpAddress(), true);
+                
+                // Log IP address access for audit purposes
+                try {
+                    ipPrivacyService.logIpAddressAccess(record.getIpAddress(), record.getUserId(), null, "ACCESS");
+                } catch (Exception e) {
+                    logger.warn("Failed to log IP address access for export: {}", e.getMessage());
+                }
+            }
             
             csv.append(record.getTimestamp().format(dateFormatter)).append(",");
             csv.append(record.getTimestamp().format(timeFormatter)).append(",");
@@ -300,7 +426,10 @@ public class AdminRecordsService {
             csv.append(dto.getUserDepartmentName() != null ? "\"" + dto.getUserDepartmentName() + "\"" : "").append(",");
             csv.append(getTypeDisplayName(record.getType().name())).append(",");
             csv.append(record.getQrCodeValue()).append(",");
-            csv.append(record.getIpAddress() != null ? record.getIpAddress() : "Bilinmiyor").append(",");
+            csv.append(exportIpAddress).append(",");
+            csv.append(ipComplianceStatus).append(",");
+            csv.append(ipMismatchIndicator).append(",");
+            csv.append(assignedIps.isEmpty() ? "Yok" : "\"" + assignedIps + "\"").append(",");
             csv.append(record.getLatitude() != null ? record.getLatitude().toString() : "").append(",");
             csv.append(record.getLongitude() != null ? record.getLongitude().toString() : "").append("\n");
         }
@@ -374,6 +503,289 @@ public class AdminRecordsService {
     }
     
     /**
+     * Get IP address statistics for advanced filtering.
+     * 
+     * @return Map containing IP statistics and common IP addresses
+     * Requirements: 2.4 - IP address filtering functionality
+     */
+    public Map<String, Object> getIpStatistics() {
+        List<EntryExitRecord> allRecords = entryExitRecordRepository.findAll();
+        
+        Map<String, Object> statistics = new HashMap<>();
+        
+        // Count total records with IP addresses
+        long totalWithIp = allRecords.stream()
+                .filter(record -> record.getIpAddress() != null && !record.getIpAddress().isEmpty())
+                .count();
+        
+        long totalWithoutIp = allRecords.size() - totalWithIp;
+        
+        // Count IPv4 vs IPv6
+        long ipv4Count = allRecords.stream()
+                .filter(record -> record.getIpAddress() != null && isIPv4(record.getIpAddress()))
+                .count();
+        
+        long ipv6Count = allRecords.stream()
+                .filter(record -> record.getIpAddress() != null && isIPv6(record.getIpAddress()))
+                .count();
+        
+        // Get most common IP addresses
+        Map<String, Long> ipFrequency = allRecords.stream()
+                .filter(record -> record.getIpAddress() != null && !record.getIpAddress().isEmpty())
+                .collect(Collectors.groupingBy(EntryExitRecord::getIpAddress, Collectors.counting()));
+        
+        List<Map<String, Object>> commonIps = ipFrequency.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(10)
+                .map(entry -> {
+                    Map<String, Object> ipInfo = new HashMap<>();
+                    ipInfo.put("ipAddress", entry.getKey());
+                    ipInfo.put("count", entry.getValue());
+                    ipInfo.put("type", isIPv4(entry.getKey()) ? "IPv4" : (isIPv6(entry.getKey()) ? "IPv6" : "Unknown"));
+                    return ipInfo;
+                })
+                .collect(Collectors.toList());
+        
+        // Get IP compliance statistics
+        long mismatchCount = 0;
+        long matchCount = 0;
+        long noAssignmentCount = 0;
+        
+        for (EntryExitRecord record : allRecords) {
+            Optional<User> userOpt = userRepository.findById(record.getUserId());
+            if (userOpt.isPresent()) {
+                IpComplianceService.IpComplianceStatus status = ipComplianceService.getIpComplianceStatus(record, userOpt.get());
+                switch (status) {
+                    case MATCH:
+                        matchCount++;
+                        break;
+                    case MISMATCH:
+                        mismatchCount++;
+                        break;
+                    case NO_ASSIGNMENT:
+                    case UNKNOWN_IP:
+                        noAssignmentCount++;
+                        break;
+                }
+            } else {
+                noAssignmentCount++;
+            }
+        }
+        
+        statistics.put("totalRecords", allRecords.size());
+        statistics.put("totalWithIp", totalWithIp);
+        statistics.put("totalWithoutIp", totalWithoutIp);
+        statistics.put("ipv4Count", ipv4Count);
+        statistics.put("ipv6Count", ipv6Count);
+        statistics.put("commonIps", commonIps);
+        statistics.put("mismatchCount", mismatchCount);
+        statistics.put("matchCount", matchCount);
+        statistics.put("noAssignmentCount", noAssignmentCount);
+        
+        return statistics;
+    }
+    
+    /**
+     * Search records by IP address with advanced options.
+     * 
+     * @param ipQuery IP search query (supports ranges, CIDR, exact match)
+     * @param ipType IP type filter (ipv4, ipv6, unknown)
+     * @param complianceStatus Compliance status filter
+     * @param page Page number (0-based)
+     * @param size Page size
+     * @return Page of AdminRecordDto objects matching IP search criteria
+     * Requirements: 2.4 - IP address filtering functionality
+     */
+    public Page<AdminRecordDto> searchRecordsByIp(String ipQuery, String ipType, String complianceStatus, int page, int size) {
+        List<EntryExitRecord> allRecords = entryExitRecordRepository.findAll();
+        
+        List<EntryExitRecord> filteredRecords = allRecords.stream()
+                .filter(record -> {
+                    // IP query filter
+                    if (ipQuery != null && !ipQuery.isEmpty()) {
+                        if (!matchesIpQuery(record.getIpAddress(), ipQuery)) {
+                            return false;
+                        }
+                    }
+                    
+                    // IP type filter
+                    if (ipType != null && !ipType.isEmpty()) {
+                        if (!matchesIpType(record.getIpAddress(), ipType)) {
+                            return false;
+                        }
+                    }
+                    
+                    // Compliance status filter
+                    if (complianceStatus != null && !complianceStatus.isEmpty()) {
+                        Optional<User> userOpt = userRepository.findById(record.getUserId());
+                        if (userOpt.isPresent()) {
+                            IpComplianceService.IpComplianceStatus status = ipComplianceService.getIpComplianceStatus(record, userOpt.get());
+                            
+                            switch (complianceStatus.toLowerCase()) {
+                                case "compliant":
+                                    if (status != IpComplianceService.IpComplianceStatus.MATCH) {
+                                        return false;
+                                    }
+                                    break;
+                                case "non-compliant":
+                                    if (status != IpComplianceService.IpComplianceStatus.MISMATCH) {
+                                        return false;
+                                    }
+                                    break;
+                                case "no-assignment":
+                                    if (status != IpComplianceService.IpComplianceStatus.NO_ASSIGNMENT && 
+                                        status != IpComplianceService.IpComplianceStatus.UNKNOWN_IP) {
+                                        return false;
+                                    }
+                                    break;
+                            }
+                        } else if (!"no-assignment".equalsIgnoreCase(complianceStatus)) {
+                            return false;
+                        }
+                    }
+                    
+                    return true;
+                })
+                .sorted((r1, r2) -> r2.getTimestamp().compareTo(r1.getTimestamp()))
+                .collect(Collectors.toList());
+        
+        Pageable pageable = PageRequest.of(page, size);
+        int start = page * size;
+        int end = Math.min(start + size, filteredRecords.size());
+        
+        List<AdminRecordDto> pageContent = filteredRecords.subList(start, end)
+                .stream()
+                .map(this::convertToAdminRecordDto)
+                .collect(Collectors.toList());
+        
+        return new PageImpl<>(pageContent, pageable, filteredRecords.size());
+    }
+    
+    /**
+     * Check if IP address matches the given query.
+     * Supports exact match, range, CIDR notation, and contains.
+     */
+    private boolean matchesIpQuery(String ipAddress, String query) {
+        if (ipAddress == null) {
+            return "unknown".equalsIgnoreCase(query) || "null".equalsIgnoreCase(query);
+        }
+        
+        query = query.trim();
+        
+        // Handle special queries
+        if ("unknown".equalsIgnoreCase(query) || "null".equalsIgnoreCase(query)) {
+            return false; // IP address exists, so it's not unknown
+        }
+        
+        // Handle range queries (e.g., "range:192.168.1.1-192.168.1.255")
+        if (query.startsWith("range:")) {
+            String rangeSpec = query.substring(6);
+            String[] parts = rangeSpec.split("-");
+            if (parts.length == 2) {
+                return isIpInRange(ipAddress, parts[0].trim(), parts[1].trim());
+            }
+        }
+        
+        // Handle subnet queries (e.g., "subnet:192.168.1.0/24")
+        if (query.startsWith("subnet:")) {
+            String subnet = query.substring(7);
+            return isIpInSubnet(ipAddress, subnet);
+        }
+        
+        // Handle prefix matching (e.g., "192.168.1.")
+        if (query.endsWith(".")) {
+            return ipAddress.startsWith(query);
+        }
+        
+        // Handle CIDR notation
+        if (query.contains("/")) {
+            return isIpInSubnet(ipAddress, query);
+        }
+        
+        // Handle contains matching
+        if (query.startsWith("*") && query.endsWith("*")) {
+            String searchTerm = query.substring(1, query.length() - 1);
+            return ipAddress.contains(searchTerm);
+        }
+        
+        // Exact match
+        return query.equals(ipAddress);
+    }
+    
+    /**
+     * Check if IP address matches the given type.
+     */
+    private boolean matchesIpType(String ipAddress, String type) {
+        if (ipAddress == null) {
+            return "unknown".equalsIgnoreCase(type);
+        }
+        
+        switch (type.toLowerCase()) {
+            case "ipv4":
+                return isIPv4(ipAddress);
+            case "ipv6":
+                return isIPv6(ipAddress);
+            case "unknown":
+                return !isIPv4(ipAddress) && !isIPv6(ipAddress);
+            default:
+                return true;
+        }
+    }
+    
+    /**
+     * Check if IP address is in the specified range.
+     */
+    private boolean isIpInRange(String ipAddress, String startIp, String endIp) {
+        try {
+            // Simple IPv4 range check (this could be enhanced for IPv6)
+            if (isIPv4(ipAddress) && isIPv4(startIp) && isIPv4(endIp)) {
+                long ip = ipToLong(ipAddress);
+                long start = ipToLong(startIp);
+                long end = ipToLong(endIp);
+                return ip >= start && ip <= end;
+            }
+        } catch (Exception e) {
+            // If parsing fails, fall back to string comparison
+        }
+        return false;
+    }
+    
+    /**
+     * Check if IP address is in the specified subnet (CIDR notation).
+     */
+    private boolean isIpInSubnet(String ipAddress, String subnet) {
+        try {
+            if (!isIPv4(ipAddress) || !subnet.contains("/")) {
+                return false;
+            }
+            
+            String[] parts = subnet.split("/");
+            String networkIp = parts[0];
+            int prefixLength = Integer.parseInt(parts[1]);
+            
+            long ip = ipToLong(ipAddress);
+            long network = ipToLong(networkIp);
+            long mask = (-1L << (32 - prefixLength));
+            
+            return (ip & mask) == (network & mask);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+    /**
+     * Convert IPv4 address to long for range calculations.
+     */
+    private long ipToLong(String ipAddress) {
+        String[] parts = ipAddress.split("\\.");
+        long result = 0;
+        for (int i = 0; i < 4; i++) {
+            result = (result << 8) + Integer.parseInt(parts[i]);
+        }
+        return result;
+    }
+    
+    /**
      * Convert EntryExitRecord entity to AdminRecordDto.
      * 
      * @param record EntryExitRecord entity
@@ -383,6 +795,25 @@ public class AdminRecordsService {
         // Get user information
         Optional<User> userOpt = userRepository.findById(record.getUserId());
         User user = userOpt.orElse(null);
+        
+        // Determine IP mismatch status
+        Boolean ipMismatch = null;
+        if (user != null) {
+            IpComplianceService.IpComplianceStatus status = ipComplianceService.getIpComplianceStatus(record, user);
+            switch (status) {
+                case MATCH:
+                    ipMismatch = false;
+                    break;
+                case MISMATCH:
+                    ipMismatch = true;
+                    break;
+                case NO_ASSIGNMENT:
+                case UNKNOWN_IP:
+                default:
+                    ipMismatch = null; // No assignment or unknown IP
+                    break;
+            }
+        }
         
         return AdminRecordDto.builder()
                 .id(record.getId())
@@ -399,6 +830,7 @@ public class AdminRecordsService {
                 .longitude(record.getLongitude())
                 .qrCodeValue(record.getQrCodeValue())
                 .ipAddress(record.getIpAddress())
+                .ipMismatch(ipMismatch)
                 .hasGpsCoordinates(record.hasGpsCoordinates())
                 .createdAt(record.getCreatedAt())
                 .build();
@@ -419,6 +851,24 @@ public class AdminRecordsService {
             default:
                 return type;
         }
+    }
+    
+    /**
+     * Check if IP address is IPv4 format.
+     */
+    private boolean isIPv4(String ip) {
+        if (ip == null || ip.isEmpty()) return false;
+        String ipv4Pattern = "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
+        return ip.matches(ipv4Pattern);
+    }
+    
+    /**
+     * Check if IP address is IPv6 format.
+     */
+    private boolean isIPv6(String ip) {
+        if (ip == null || ip.isEmpty()) return false;
+        // Simple IPv6 check - contains colons and valid hex characters
+        return ip.contains(":") && ip.matches("^[0-9a-fA-F:]+$");
     }
     
     /**

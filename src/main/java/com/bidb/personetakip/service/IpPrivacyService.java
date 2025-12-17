@@ -1,9 +1,11 @@
 package com.bidb.personetakip.service;
 
+import com.bidb.personetakip.exception.IpPrivacyConfigurationException;
+
 /**
  * Service interface for IP privacy and anonymization operations.
  * Handles IP address masking, anonymization, and privacy-compliant display.
- * Requirements: 5.2, 5.3, 5.5
+ * Requirements: 5.2, 5.3, 5.5, 6.5
  */
 public interface IpPrivacyService {
     
@@ -17,6 +19,19 @@ public interface IpPrivacyService {
      * Requirements: 5.2 - Respect user privacy settings if configured
      */
     String displayIpAddress(String ipAddress, boolean respectPrivacySettings);
+    
+    /**
+     * Displays IP address with detailed error handling.
+     * 
+     * @param ipAddress Original IP address
+     * @param respectPrivacySettings Whether to apply privacy settings
+     * @param throwOnError Whether to throw exception on configuration errors
+     * @return Privacy-compliant IP address display
+     * @throws IpPrivacyConfigurationException if privacy configuration is invalid and throwOnError is true
+     * Requirements: 5.2 - Respect user privacy settings if configured
+     *               6.5 - IP privacy configuration error handling
+     */
+    String displayIpAddressWithErrorHandling(String ipAddress, boolean respectPrivacySettings, boolean throwOnError) throws IpPrivacyConfigurationException;
     
     /**
      * Anonymizes IP address by masking parts of it.

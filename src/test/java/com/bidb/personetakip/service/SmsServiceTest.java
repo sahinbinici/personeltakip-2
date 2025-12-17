@@ -211,4 +211,48 @@ class SmsServiceTest {
         assertThrows(SmsServiceException.class, 
             () -> smsService.sendSms(phoneNumber, message));
     }
+    
+    /**
+     * Test phone number formatting for different input formats.
+     */
+    @Test
+    void testPhoneNumberFormatting() {
+        // Arrange
+        String message = "Test message";
+        ResponseEntity<String> successResponse = new ResponseEntity<>("Success", HttpStatus.OK);
+        ArgumentCaptor<HttpEntity> requestCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        
+        when(restTemplate.exchange(
+            eq(TEST_GATEWAY_URL),
+            eq(HttpMethod.POST),
+            requestCaptor.capture(),
+            eq(String.class)
+        )).thenReturn(successResponse);
+        
+        // Test different phone number formats
+        String[][] testCases = {
+            {"05551234567", "5551234567"},     // Turkish format with leading 0
+            {"5551234567", "5551234567"},      // Already correct format
+            {"905551234567", "5551234567"},    // International format
+            {"+905551234567", "5551234567"},   // International with +
+            {"0 555 123 45 67", "5551234567"}, // With spaces
+            {"(0555) 123-45-67", "5551234567"} // With parentheses and dashes
+        };
+        
+        for (String[] testCase : testCases) {
+            String input = testCase[0];
+            String expected = testCase[1];
+            
+            // Act
+            smsService.sendSms(input, message);
+            
+            // Assert
+            HttpEntity<Map<String, Object>> capturedRequest = requestCaptor.getValue();
+            Map<String, Object> body = capturedRequest.getBody();
+            String[] phones = (String[]) body.get("phones");
+            
+            assertEquals(expected, phones[0], 
+                String.format("Phone number formatting failed for input: %s", input));
+        }
+    }
 }

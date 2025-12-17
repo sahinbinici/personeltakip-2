@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="tr" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP Takip Ayarları - Gaziantep Üniversitesi Personel Takip Sistemi</title>
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+    <style>
+        .config-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .config-section h3 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .form-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-enabled { background-color: #28a745; }
+        .status-disabled { background-color: #dc3545; }
+        .config-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .config-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>IP Takip Ayarları</h1>
+            <div class="admin-nav">
+                <a th:href="@{/admin/dashboard}" class="nav-link">Dashboard</a>
+                <a th:href="@{/admin/users}" class="nav-link">Kullanıcılar</a>
+                <a th:href="@{/admin/records}" class="nav-link">Kayıtlar</a>
+                <a th:href="@{/admin/reports}" class="nav-link">Raporlar</a>
+                <a th:href="@{/admin/ip-tracking-config}" class="nav-link active">IP Ayarları</a>
+            </div>
+        </div>
+
+        <div class="admin-content">
+            <!-- Error Message -->
+            <div th:if="${error}" class="alert alert-danger">
+                <span th:text="${error}"></span>
+            </div>
+
+            <!-- Current Status -->
+            <div class="config-section">
+                <h3>Mevcut Durum</h3>
+                <div class="status-info">
+                    <p>
+                        <span th:class="${config.enabled} ? 'status-indicator status-enabled' : 'status-indicator status-disabled'"></span>
+                        IP Takibi: <strong th:text="${config.enabled} ? 'Aktif' : 'Pasif'"></strong>
+                    </p>
+                    <p>
+                        <span th:class="${config.privacy.enabled} ? 'status-indicator status-enabled' : 'status-indicator status-disabled'"></span>
+                        Gizlilik Modu: <strong th:text="${config.privacy.enabled} ? 'Aktif' : 'Pasif'"></strong>
+                    </p>
+                    <p>
+                        <span th:class="${config.anonymization.enabled} ? 'status-indicator status-enabled' : 'status-indicator status-disabled'"></span>
+                        Anonimleştirme: <strong th:text="${config.anonymization.enabled} ? 'Aktif' : 'Pasif'"></strong>
+                    </p>
+                </div>
+            </div>
+
+            <div class="config-grid">
+                <!-- Main Settings -->
+                <div class="config-section">
+                    <h3>Temel Ayarlar</h3>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" th:checked="${config.enabled}" disabled>
+                            IP Takibini Etkinleştir
+                        </label>
+                        <div class="help-text">Giriş/çıkış işlemlerinde IP adresi takibini etkinleştirir</div>
+                    </div>
+                </div>
+
+                <!-- Privacy Settings -->
+                <div class="config-section">
+                    <h3>Gizlilik Ayarları</h3>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" th:checked="${config.privacy.enabled}" disabled>
+                            Gizlilik Modunu Etkinleştir
+                        </label>
+                        <div class="help-text">IP adreslerinin gizlilik uyumlu görüntülenmesini sağlar</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" th:checked="${config.privacy.anonymizeReports}" disabled>
+                            Raporlarda Anonimleştir
+                        </label>
+                        <div class="help-text">Tüm raporlarda IP adreslerini otomatik anonimleştirir</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" th:checked="${config.privacy.auditLogging}" disabled>
+                            Denetim Kaydı
+                        </label>
+                        <div class="help-text">IP adresi erişim ve değişikliklerini kayıt altına alır</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="retentionDays">Kayıt Saklama Süresi (Gün)</label>
+                        <input type="number" id="retentionDays" th:value="${config.privacy.retentionDays}" disabled>
+                        <div class="help-text">IP kayıtlarının saklanma süresi (0 = sınırsız)</div>
+                    </div>
+                </div>
+
+                <!-- Anonymization Settings -->
+                <div class="config-section">
+                    <h3>Anonimleştirme Ayarları</h3>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" th:checked="${config.anonymization.enabled}" disabled>
+                            Anonimleştirmeyi Etkinleştir
+                        </label>
+                        <div class="help-text">IP adreslerinin anonimleştirilmesini etkinleştirir</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="anonymizationMethod">Anonimleştirme Yöntemi</label>
+                        <select id="anonymizationMethod" disabled>
+                            <option th:each="method : ${anonymizationMethods}" 
+                                    th:value="${method}" 
+                                    th:text="${method}" 
+                                    th:selected="${method == config.anonymization.method}"></option>
+                        </select>
+                        <div class="help-text">MASK: Karakter ile maskeleme, HASH: SHA-256 hash, TRUNCATE: Kısaltma</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ipv4PreserveOctets">IPv4 Korunacak Oktet Sayısı</label>
+                        <input type="number" id="ipv4PreserveOctets" min="1" max="4" th:value="${config.anonymization.ipv4PreserveOctets}" disabled>
+                        <div class="help-text">IPv4 adresinde korunacak oktet sayısı (1-4)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ipv6PreserveGroups">IPv6 Korunacak Grup Sayısı</label>
+                        <input type="number" id="ipv6PreserveGroups" min="1" max="8" th:value="${config.anonymization.ipv6PreserveGroups}" disabled>
+                        <div class="help-text">IPv6 adresinde korunacak grup sayısı (1-8)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="maskCharacter">Maskeleme Karakteri</label>
+                        <input type="text" id="maskCharacter" maxlength="1" th:value="${config.anonymization.maskCharacter}" disabled>
+                        <div class="help-text">IP maskelemede kullanılacak karakter</div>
+                    </div>
+                </div>
+
+                <!-- Performance Settings -->
+                <div class="config-section">
+                    <h3>Performans Ayarları</h3>
+                    <div class="form-group">
+                        <label for="captureTimeout">IP Yakalama Zaman Aşımı (ms)</label>
+                        <input type="number" id="captureTimeout" th:value="${config.performance.captureTimeoutMs}" disabled>
+                        <div class="help-text">IP adresi yakalama için maksimum süre</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" th:checked="${config.performance.asyncLogging}" disabled>
+                            Asenkron Kayıt
+                        </label>
+                        <div class="help-text">Yanıt sürelerini iyileştirmek için asenkron kayıt kullanır</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cacheSize">Önbellek Boyutu</label>
+                        <input type="number" id="cacheSize" th:value="${config.performance.cacheSize}" disabled>
+                        <div class="help-text">Hızlı erişim için önbellekte tutulacak IP sayısı</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cacheTtl">Önbellek TTL (saniye)</label>
+                        <input type="number" id="cacheTtl" th:value="${config.performance.cacheTtlSeconds}" disabled>
+                        <div class="help-text">Önbellek verilerinin yaşam süresi</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Information Section -->
+            <div class="config-section">
+                <h3>Bilgilendirme</h3>
+                <div class="alert alert-info">
+                    <p><strong>Not:</strong> Bu ayarlar şu anda sadece görüntüleme amaçlıdır. Ayarları değiştirmek için sistem yöneticisi ile iletişime geçin.</p>
+                    <p><strong>Önemli:</strong> IP takibi ayarları sistem performansını ve gizliliği etkileyebilir. Değişiklikler yapmadan önce sistem gereksinimlerini gözden geçirin.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Future: Add JavaScript for dynamic configuration updates
+        console.log('IP Tracking Configuration page loaded');
+    </script>
+</body>
+</html>

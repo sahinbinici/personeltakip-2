@@ -1,5 +1,6 @@
 package com.bidb.personetakip.service;
 
+import com.bidb.personetakip.exception.IpAssignmentException;
 import com.bidb.personetakip.model.EntryExitRecord;
 import com.bidb.personetakip.model.User;
 
@@ -8,7 +9,7 @@ import java.util.List;
 /**
  * Service interface for IP compliance operations.
  * Handles IP assignment comparison, mismatch detection, and compliance reporting.
- * Requirements: 3.4, 4.1, 4.2, 4.3, 4.4
+ * Requirements: 3.1, 3.2, 3.4, 3.5, 4.1, 4.2, 4.3, 4.4
  */
 public interface IpComplianceService {
     
@@ -61,6 +62,28 @@ public interface IpComplianceService {
      * Requirements: 3.4 - Multiple IP address support
      */
     boolean validateAssignedIpAddresses(String assignedIpAddresses);
+    
+    /**
+     * Validates assigned IP addresses with detailed error handling.
+     * 
+     * @param assignedIpAddresses Comma or semicolon separated IP addresses
+     * @param userId User ID for error context
+     * @throws IpAssignmentException if validation fails
+     * Requirements: 3.1 - IP assignment field availability
+     *               3.2 - IP assignment format validation
+     */
+    void validateAssignedIpAddressesWithException(String assignedIpAddresses, String userId) throws IpAssignmentException;
+    
+    /**
+     * Validates IP assignment removal operation.
+     * 
+     * @param currentAssignment Current IP assignment string
+     * @param ipToRemove IP address to remove
+     * @param userId User ID for error context
+     * @throws IpAssignmentException if removal validation fails
+     * Requirements: 3.5 - IP assignment removal safety
+     */
+    void validateIpAssignmentRemoval(String currentAssignment, String ipToRemove, String userId) throws IpAssignmentException;
     
     /**
      * Enum representing IP compliance status

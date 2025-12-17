@@ -1,3 +1,6 @@
+# =============================================================================
+# JAVA / SPRING BOOT
+# =============================================================================
 HELP.md
 .gradle
 build/
@@ -35,3 +38,210 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# =============================================================================
+# ENVIRONMENT & CONFIGURATION FILES
+# =============================================================================
+# Environment files with sensitive data
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.staging
+.env.external-mysql
+
+# Application properties with sensitive data
+src/main/resources/application-prod.properties
+src/main/resources/application-staging.properties
+src/main/resources/application-local.properties
+
+# Database configuration
+src/main/resources/application-database.properties
+
+# Keystore files
+*.keystore
+*.jks
+*.p12
+keystore.properties
+mobile-app/android/app/keystore.properties
+
+# =============================================================================
+# LOGS & TEMPORARY FILES
+# =============================================================================
+logs/
+*.log
+*.log.*
+log/
+temp/
+tmp/
+
+# =============================================================================
+# DEPLOYMENT & DOCKER
+# =============================================================================
+# Docker volumes and data
+docker-data/
+mysql-data/
+postgres-data/
+
+# Deployment artifacts
+*.tar
+*.tar.gz
+*.zip
+personeltakip*.tar
+personeltakip*.zip
+
+# Nginx configuration files (keep examples)
+nginx-*.conf
+!nginx-config-example.conf
+
+# =============================================================================
+# MOBILE APP (SEPARATE WORKSPACE)
+# =============================================================================
+# Mobile app has been moved to separate workspace
+# Keep this section for reference if mobile-app directory exists temporarily
+mobile-app/
+
+# =============================================================================
+# OPERATING SYSTEM FILES
+# =============================================================================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# BACKUP & TEMPORARY FILES
+# =============================================================================
+*.bak
+*.backup
+*.swp
+*.swo
+*~
+.#*
+#*#
+.*.swp
+.*.swo
+
+# =============================================================================
+# SECURITY & SENSITIVE DATA
+# =============================================================================
+# SSH keys
+*.pem
+*.key
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+
+# SSL certificates
+*.crt
+*.cert
+*.ca-bundle
+
+# Database dumps
+*.sql.gz
+*.dump
+database_backup*
+
+# =============================================================================
+# DEVELOPMENT TOOLS
+# =============================================================================
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Eclipse
+.metadata
+.recommenders/
+.project
+.classpath
+.settings/
+
+# Visual Studio Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# PACKAGE MANAGERS
+# =============================================================================
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# NPM
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# =============================================================================
+# CUSTOM PROJECT FILES
+# =============================================================================
+# Kiro IDE (keep specs but ignore temp files)
+.kiro/temp/
+.kiro/cache/
+
+# Custom deployment files (keep examples)
+deploy-custom.sh
+deploy-custom.ps1
+deploy-local.*
+
+# Test data
+test-data/
+sample-data/
+
+# Documentation builds
+docs/build/
+docs/_build/

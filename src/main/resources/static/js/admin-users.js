@@ -124,7 +124,7 @@ function displayUsers(data) {
     if (!data.content || data.content.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="no-data">
+                <td colspan="9" class="no-data">
                     <div class="no-data-message">
                         <i class="fas fa-users"></i>
                         <p>Kullanıcı bulunamadı</p>
@@ -144,6 +144,11 @@ function displayUsers(data) {
         
         const departmentName = user.departmentName || user.departmentCode || '--';
         
+        const assignedIps = user.assignedIpAddresses || '';
+        const ipDisplay = assignedIps ? 
+            `<span class="ip-assigned" title="${assignedIps}">${formatIpAddresses(assignedIps)}</span>` : 
+            '<span class="ip-not-assigned">Atanmamış</span>';
+        
         return `
             <tr>
                 <td>${user.tcNo}</td>
@@ -151,6 +156,7 @@ function displayUsers(data) {
                 <td>${user.personnelNo}</td>
                 <td>${departmentName}</td>
                 <td>${user.mobilePhone}</td>
+                <td class="ip-address-cell">${ipDisplay}</td>
                 <td>
                     <span class="role-badge role-${user.role.toLowerCase()}">${roleDisplayName}</span>
                 </td>
@@ -159,6 +165,9 @@ function displayUsers(data) {
                     <div class="action-buttons">
                         <button class="btn btn-sm btn-info" onclick="showUserDetail(${user.id})" title="Detayları Görüntüle">
                             <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="showIpAssignmentModal(${user.id}, '${user.fullName}', '${assignedIps}')" title="IP Adresi Yönet">
+                            <i class="fas fa-network-wired"></i>
                         </button>
                         <button class="btn btn-sm btn-warning" onclick="showRoleChangeModal(${user.id}, '${user.fullName}', '${user.role}')" title="Rol Değiştir">
                             <i class="fas fa-user-cog"></i>
@@ -380,6 +389,10 @@ function displayUserDetail(user) {
     const fullName = user.fullName || 'Bilinmeyen';
     const roleDisplayName = getRoleDisplayName(user.role);
     
+    const assignedIpsDisplay = user.assignedIpAddresses ? 
+        `<span class="ip-assigned">${user.assignedIpAddresses}</span>` : 
+        '<span class="ip-not-assigned">Atanmamış</span>';
+    
     content.innerHTML = `
         <div class="user-detail-grid">
             <div class="detail-row">
@@ -409,6 +422,10 @@ function displayUserDetail(user) {
             <div class="detail-row">
                 <label>Ünvan Kodu:</label>
                 <span>${user.titleCode || 'Belirtilmemiş'}</span>
+            </div>
+            <div class="detail-row">
+                <label>Atanmış IP Adresleri:</label>
+                ${assignedIpsDisplay}
             </div>
             <div class="detail-row">
                 <label>Rol:</label>
@@ -525,6 +542,165 @@ function hideSuccess() {
     }
 }
 
+// IP Assignment Modal Functions
+let selectedUserIdForIp = null;
+
+// Show IP assignment modal
+function showIpAssignmentModal(userId, userName, currentIps) {
+    selectedUserIdForIp = userId;
+    
+    document.getElementById('ipAssignmentUserName').textContent = userName;
+    document.getElementById('ipAssignmentCurrentIps').textContent = currentIps || 'Atanmamış';
+    document.getElementById('ipAddressesInput').value = currentIps || '';
+    
+    // Clear validation error
+    hideIpValidationError();
+    
+    document.getElementById('ipAssignmentModal').style.display = 'flex';
+}
+
+// Close IP assignment modal
+function closeIpAssignmentModal() {
+    document.getElementById('ipAssignmentModal').style.display = 'none';
+    selectedUserIdForIp = null;
+    hideIpValidationError();
+}
+
+// Confirm IP assignment
+async function confirmIpAssignment() {
+    if (!selectedUserIdForIp) return;
+    
+    const ipAddresses = document.getElementById('ipAddressesInput').value.trim();
+    
+    // Validate IP addresses
+    if (ipAddresses && !validateIpAddresses(ipAddresses)) {
+        return; // Validation error already shown
+    }
+    
+    try {
+        showLoading();
+        
+        const response = await makeAuthenticatedRequest(`/api/admin/users/${selectedUserIdForIp}/ip-assignment`, {
+            method: 'PUT',
+            body: JSON.stringify({ ipAddresses: ipAddresses })
+        });
+        
+        if (!response) return;
+        
+        if (response.ok) {
+            showSuccess('IP adresi ataması başarıyla güncellendi');
+            closeIpAssignmentModal();
+            loadUsers();
+        } else {
+            const error = await response.json();
+            showError(error.error || 'IP adresi güncellenirken hata oluştu');
+        }
+    } catch (error) {
+        console.error('Error updating IP assignment:', error);
+        showError('IP adresi güncellenirken hata oluştu');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Remove IP assignment
+async function removeIpAssignment() {
+    if (!selectedUserIdForIp) return;
+    
+    if (!confirm('Bu kullanıcının IP adresi atamasını kaldırmak istediğinizden emin misiniz?')) {
+        return;
+    }
+    
+    try {
+        showLoading();
+        
+        const response = await makeAuthenticatedRequest(`/api/admin/users/${selectedUserIdForIp}/ip-assignment`, {
+            method: 'DELETE'
+        });
+        
+        if (!response) return;
+        
+        if (response.ok) {
+            showSuccess('IP adresi ataması başarıyla kaldırıldı');
+            closeIpAssignmentModal();
+            loadUsers();
+        } else {
+            const error = await response.json();
+            showError(error.error || 'IP adresi kaldırılırken hata oluştu');
+        }
+    } catch (error) {
+        console.error('Error removing IP assignment:', error);
+        showError('IP adresi kaldırılırken hata oluştu');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Validate IP addresses
+function validateIpAddresses(ipAddresses) {
+    if (!ipAddresses || ipAddresses.trim() === '') {
+        return true; // Empty is valid (removes assignment)
+    }
+    
+    const ipArray = ipAddresses.split(/[,;]/);
+    const invalidIps = [];
+    
+    for (let ip of ipArray) {
+        const trimmedIp = ip.trim();
+        if (trimmedIp && !isValidIpAddress(trimmedIp)) {
+            invalidIps.push(trimmedIp);
+        }
+    }
+    
+    if (invalidIps.length > 0) {
+        showIpValidationError(`Geçersiz IP adresi formatı: ${invalidIps.join(', ')}`);
+        return false;
+    }
+    
+    hideIpValidationError();
+    return true;
+}
+
+// Check if IP address is valid (IPv4 or IPv6)
+function isValidIpAddress(ip) {
+    // IPv4 regex
+    const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    
+    // IPv6 regex (simplified)
+    const ipv6Regex = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::1$|^::$/;
+    
+    // IPv6 compressed format
+    const ipv6CompressedRegex = /^(?:[0-9a-fA-F]{1,4}:)*::(?:[0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{1,4}$|^::$/;
+    
+    return ipv4Regex.test(ip) || ipv6Regex.test(ip) || ipv6CompressedRegex.test(ip);
+}
+
+// Show IP validation error
+function showIpValidationError(message) {
+    const errorDiv = document.getElementById('ipValidationError');
+    const errorSpan = errorDiv.querySelector('span');
+    errorSpan.textContent = message;
+    errorDiv.style.display = 'flex';
+}
+
+// Hide IP validation error
+function hideIpValidationError() {
+    const errorDiv = document.getElementById('ipValidationError');
+    errorDiv.style.display = 'none';
+}
+
+// Format IP addresses for display (truncate if too long)
+function formatIpAddresses(ipAddresses) {
+    if (!ipAddresses) return '';
+    
+    const maxLength = 25;
+    if (ipAddresses.length <= maxLength) {
+        return ipAddresses;
+    }
+    
+    return ipAddresses.substring(0, maxLength) + '...';
+}
+
 // Debounce function for search
 function debounce(func, wait) {
     let timeout;
@@ -537,3 +713,184 @@ function debounce(func, wait) {
         timeout = setTimeout(later, wait);
     };
 }
+// IP Tracking Help and Information Functions
+
+// Show IP assignment help modal
+async function showIpAssignmentHelp() {
+    try {
+        const response = await makeAuthenticatedRequest('/api/admin/dashboard/ip-tracking/info');
+        
+        if (response && response.ok) {
+            const info = await response.json();
+            showIpHelpModal(info.helpText, info);
+        } else {
+            showIpHelpModal('IP adresi atama yardımı yüklenemedi.', null);
+        }
+    } catch (error) {
+        console.error('Failed to load IP tracking info:', error);
+        showIpHelpModal('IP adresi atama yardımı yüklenemedi.', null);
+    }
+}
+
+// Show IP help modal with detailed information
+function showIpHelpModal(helpText, ipInfo) {
+    const modal = document.createElement('div');
+    modal.className = 'ip-help-modal';
+    
+    const statusSection = ipInfo ? `
+        <div class="ip-help-section">
+            <h4><i class="fas fa-info-circle"></i> IP Takibi Durumu</h4>
+            <div class="ip-tracking-status-indicator ${ipInfo.enabled ? 'enabled' : 'disabled'}">
+                <i class="fas ${ipInfo.enabled ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                ${ipInfo.statusDisplay}
+            </div>
+            ${ipInfo.privacyEnabled ? `
+                <div class="ip-tracking-status-indicator privacy">
+                    <i class="fas fa-user-shield"></i>
+                    Gizlilik koruması aktif
+                </div>
+            ` : ''}
+            ${ipInfo.notice ? `
+                <div class="ip-privacy-notice">
+                    <div class="notice-icon">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <div class="notice-text">${ipInfo.notice}</div>
+                </div>
+            ` : ''}
+        </div>
+    ` : '';
+    
+    modal.innerHTML = `
+        <div class="ip-help-modal-content">
+            <div class="ip-help-modal-header">
+                <h3><i class="fas fa-network-wired"></i> IP Adresi Atama Yardımı</h3>
+                <button class="modal-close" onclick="closeIpHelpModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="ip-help-modal-body">
+                ${statusSection}
+                
+                <div class="ip-help-section">
+                    <h4><i class="fas fa-question-circle"></i> Genel Bilgi</h4>
+                    <p>${helpText}</p>
+                </div>
+                
+                <div class="ip-help-section">
+                    <h4><i class="fas fa-list"></i> Desteklenen Formatlar</h4>
+                    <ul class="ip-help-list">
+                        <li><i class="fas fa-check"></i> <strong>IPv4:</strong> <code>192.168.1.100</code></li>
+                        <li><i class="fas fa-check"></i> <strong>IPv6:</strong> <code>2001:db8::1</code></li>
+                        <li><i class="fas fa-check"></i> <strong>Birden fazla IP (virgül):</strong> <code>192.168.1.100, 10.0.0.50</code></li>
+                        <li><i class="fas fa-check"></i> <strong>Birden fazla IP (noktalı virgül):</strong> <code>192.168.1.100; 10.0.0.50</code></li>
+                        <li><i class="fas fa-check"></i> <strong>Karışık format:</strong> <code>192.168.1.100, 2001:db8::1</code></li>
+                    </ul>
+                </div>
+                
+                <div class="ip-help-section">
+                    <h4><i class="fas fa-lightbulb"></i> Kullanım Örnekleri</h4>
+                    <div class="ip-help-examples">
+                        <p><strong>Tek IPv4 adresi:</strong></p>
+                        <code>192.168.1.100</code>
+                        
+                        <p><strong>Birden fazla IPv4 adresi:</strong></p>
+                        <code>192.168.1.100, 192.168.1.101, 10.0.0.50</code>
+                        
+                        <p><strong>IPv6 adresi:</strong></p>
+                        <code>2001:db8::1</code>
+                        
+                        <p><strong>IPv4 ve IPv6 karışık:</strong></p>
+                        <code>192.168.1.100, 2001:db8::1, 10.0.0.50</code>
+                        
+                        <p><strong>Noktalı virgül ile ayırma:</strong></p>
+                        <code>192.168.1.100; 192.168.1.101; 10.0.0.50</code>
+                    </div>
+                </div>
+                
+                <div class="ip-help-section">
+                    <h4><i class="fas fa-exclamation-triangle"></i> Önemli Notlar</h4>
+                    <ul class="ip-help-list">
+                        <li><i class="fas fa-info"></i> IP adresi ataması opsiyoneldir. Boş bırakabilirsiniz.</li>
+                        <li><i class="fas fa-info"></i> Geçersiz IP formatları otomatik olarak reddedilir.</li>
+                        <li><i class="fas fa-info"></i> Atanan IP'ler giriş/çıkış kayıtlarında uyumluluk kontrolü için kullanılır.</li>
+                        <li><i class="fas fa-info"></i> Birden fazla IP adresi atayarak kullanıcının farklı lokasyonlardan erişimine izin verebilirsiniz.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close modal when clicking outside
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeIpHelpModal();
+        }
+    });
+    
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeIpHelpModal();
+        }
+    });
+}
+
+// Close IP help modal
+function closeIpHelpModal() {
+    const modal = document.querySelector('.ip-help-modal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Remove escape key listener
+    document.removeEventListener('keydown', closeIpHelpModal);
+}
+
+// Add IP tracking status indicator to user management interface
+function addIpTrackingStatusIndicator() {
+    const userManagementSection = document.querySelector('.search-section');
+    if (!userManagementSection) return;
+    
+    // Check if indicator already exists
+    if (document.querySelector('.ip-tracking-status-indicator')) return;
+    
+    // Load IP tracking info and add indicator
+    makeAuthenticatedRequest('/api/admin/dashboard/ip-tracking/info')
+        .then(response => response.json())
+        .then(info => {
+            const indicator = document.createElement('div');
+            indicator.className = `ip-tracking-status-indicator ${info.enabled ? 'enabled' : 'disabled'}`;
+            indicator.innerHTML = `
+                <i class="fas ${info.enabled ? 'fa-shield-alt' : 'fa-shield-alt'}"></i>
+                ${info.statusDisplay}
+                ${info.privacyEnabled ? ' - Gizlilik koruması aktif' : ''}
+            `;
+            
+            userManagementSection.appendChild(indicator);
+            
+            // Add privacy notice if needed
+            if (info.notice && info.privacyEnabled) {
+                const notice = document.createElement('div');
+                notice.className = 'ip-privacy-notice';
+                notice.innerHTML = `
+                    <div class="notice-icon">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <div class="notice-text">${info.notice}</div>
+                `;
+                userManagementSection.appendChild(notice);
+            }
+        })
+        .catch(error => {
+            console.error('Failed to load IP tracking status:', error);
+        });
+}
+
+// Initialize IP tracking information display
+document.addEventListener('DOMContentLoaded', function() {
+    // Add IP tracking status indicator after a short delay to ensure DOM is ready
+    setTimeout(addIpTrackingStatusIndicator, 500);
+});

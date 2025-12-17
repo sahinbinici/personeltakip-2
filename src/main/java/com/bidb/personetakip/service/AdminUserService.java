@@ -1,6 +1,7 @@
 package com.bidb.personetakip.service;
 
 import com.bidb.personetakip.dto.AdminUserDto;
+import com.bidb.personetakip.exception.IpAssignmentException;
 import com.bidb.personetakip.model.AdminAuditLog;
 import com.bidb.personetakip.model.User;
 import com.bidb.personetakip.model.UserRole;
@@ -18,6 +19,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Service for admin user management operations.
@@ -28,11 +31,19 @@ import java.util.stream.Collectors;
 @Service
 public class AdminUserService {
     
+    private static final Logger logger = LoggerFactory.getLogger(AdminUserService.class);
+    
     @Autowired
     private UserRepository userRepository;
     
     @Autowired
     private AdminAuditLogRepository adminAuditLogRepository;
+    
+    @Autowired
+    private IpComplianceService ipComplianceService;
+    
+    @Autowired
+    private IpPrivacyService ipPrivacyService;
     
     /**
      * Get paginated list of all users.
@@ -179,6 +190,93 @@ public class AdminUserService {
     }
     
     /**
+     * Update user IP assignment with comprehensive error handling and validation.
+     * 
+     * @param userId User ID to update
+     * @param ipAddresses Comma-separated IP addresses to assign
+     * @param adminUserId ID of admin performing the action
+     * @return Updated AdminUserDto
+     * @throws IpAssignmentException if IP assignment validation fails
+     * Requirements: 3.2, 3.5 - IP assignment validation and management
+     */
+    @Transactional
+    public AdminUserDto updateUserIpAssignment(Long userId, String ipAddresses, Long adminUserId) throws IpAssignmentException {
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new IpAssignmentException("User not found", "update", userId.toString());
+        }
+        
+        User user = userOpt.get();
+        String oldIpAddresses = user.getAssignedIpAddresses();
+        
+        try {
+            // Validate IP addresses using comprehensive validation
+            if (ipAddresses != null && !ipAddresses.trim().isEmpty()) {
+                ipComplianceService.validateAssignedIpAddressesWithException(ipAddresses, userId.toString());
+            }
+            
+            // Update IP assignment
+            user.setAssignedIpAddresses(ipAddresses != null && !ipAddresses.trim().isEmpty() ? ipAddresses.trim() : null);
+            user.setUpdatedAt(LocalDateTime.now());
+            User updatedUser = userRepository.save(user);
+            
+            // Log IP address modification for audit purposes
+            try {
+                ipPrivacyService.logIpAddressModification(
+                    oldIpAddresses, 
+                    ipAddresses, 
+                    userId, 
+                    adminUserId, 
+                    ipAddresses == null ? "REMOVE" : "ASSIGN"
+                );
+            } catch (Exception e) {
+                // Log error but don't fail the operation
+                logger.warn("Failed to log IP address modification for user {}: {}", userId, e.getMessage());
+            }
+            
+            // Create audit log
+            AdminAuditLog auditLog = AdminAuditLog.builder()
+                    .adminUserId(adminUserId)
+                    .action("IP_ASSIGNMENT_CHANGE")
+                    .targetUserId(userId)
+                    .details(String.format("{\"oldIpAddresses\":\"%s\",\"newIpAddresses\":\"%s\"}", 
+                            oldIpAddresses != null ? oldIpAddresses : "", 
+                            ipAddresses != null ? ipAddresses : ""))
+                    .timestamp(LocalDateTime.now())
+                    .build();
+            adminAuditLogRepository.save(auditLog);
+            
+            return convertToAdminUserDto(updatedUser);
+            
+        } catch (IpAssignmentException e) {
+            // Re-throw IP assignment exceptions with context
+            throw new IpAssignmentException(
+                "IP assignment failed for user " + userId + ": " + e.getMessage(), 
+                e.getAssignmentOperation(), 
+                userId.toString());
+        } catch (Exception e) {
+            // Wrap unexpected exceptions
+            throw new IpAssignmentException(
+                "Unexpected error during IP assignment for user " + userId + ": " + e.getMessage(), 
+                e);
+        }
+    }
+    
+    /**
+     * Remove IP assignment from user with error handling.
+     * 
+     * @param userId User ID to update
+     * @param adminUserId ID of admin performing the action
+     * @return Updated AdminUserDto
+     * @throws IpAssignmentException if removal fails
+     * Requirements: 3.5 - IP assignment removal functionality
+     */
+    @Transactional
+    public AdminUserDto removeUserIpAssignment(Long userId, Long adminUserId) throws IpAssignmentException {
+        return updateUserIpAssignment(userId, null, adminUserId);
+    }
+    
+    /**
      * Convert User entity to AdminUserDto.
      * 
      * @param user User entity
@@ -199,6 +297,7 @@ public class AdminUserService {
                 .lastLoginAt(user.getLastLoginAt())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
+                .assignedIpAddresses(user.getAssignedIpAddresses())
                 .build();
     }
     

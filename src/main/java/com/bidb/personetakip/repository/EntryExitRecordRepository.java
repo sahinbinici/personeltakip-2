@@ -206,4 +206,16 @@ public interface EntryExitRecordRepository extends JpaRepository<EntryExitRecord
      */
     @Query("SELECT DISTINCT e.ipAddress FROM EntryExitRecord e WHERE e.ipAddress IS NOT NULL AND e.ipAddress != '' ORDER BY e.ipAddress")
     List<String> findDistinctIpAddresses();
+    
+    /**
+     * Find entry/exit records by timestamp range
+     * @param startDate Start date/time
+     * @param endDate End date/time
+     * @return List of entry/exit records within date range
+     */
+    @Query("SELECT e FROM EntryExitRecord e WHERE e.timestamp BETWEEN :startDate AND :endDate ORDER BY e.timestamp DESC")
+    List<EntryExitRecord> findByTimestampBetween(
+        @Param("startDate") LocalDateTime startDate,
+        @Param("endDate") LocalDateTime endDate
+    );
 }

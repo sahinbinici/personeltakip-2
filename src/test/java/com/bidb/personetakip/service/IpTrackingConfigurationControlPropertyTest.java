@@ -1,5 +1,6 @@
 package com.bidb.personetakip.service;
 
+import com.bidb.personetakip.config.IpTrackingConfig;
 import com.pholser.junit.quickcheck.Property;
 import com.pholser.junit.quickcheck.runner.JUnitQuickcheck;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,7 +25,7 @@ public class IpTrackingConfigurationControlPropertyTest {
 
     @Before
     public void setUp() {
-        ipAddressService = new IpAddressServiceImpl();
+        ipAddressService = TestConfigurationHelper.createIpAddressService();
     }
 
     /**

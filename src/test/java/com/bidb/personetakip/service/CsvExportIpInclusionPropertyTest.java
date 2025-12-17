@@ -83,7 +83,7 @@ public class CsvExportIpInclusionPropertyTest {
         }
         
         // Test property: Generate CSV export and verify IP address inclusion
-        String csvContent = adminRecordsService.generateCsvExport(null, null, null, null, null);
+        String csvContent = adminRecordsService.generateCsvExport(null, null, null, null, null, null);
         
         // Property verification: CSV should contain IP address header
         assertTrue(csvContent.contains("IP Adresi"), 
@@ -132,7 +132,7 @@ public class CsvExportIpInclusionPropertyTest {
         // Test CSV export with IP address filtering
         String targetIp = "192.168.1.100";
         
-        String filteredCsvContent = adminRecordsService.generateCsvExport(null, null, userId, null, targetIp);
+        String filteredCsvContent = adminRecordsService.generateCsvExport(null, null, userId, null, targetIp, null);
         
         // Property verification: Filtered CSV should still include IP address header
         assertTrue(filteredCsvContent.contains("IP Adresi"), 
@@ -152,7 +152,7 @@ public class CsvExportIpInclusionPropertyTest {
         }
         
         // Test CSV export with unknown IP filter
-        String unknownIpCsvContent = adminRecordsService.generateCsvExport(null, null, userId, null, "unknown");
+        String unknownIpCsvContent = adminRecordsService.generateCsvExport(null, null, userId, null, "unknown", null);
         
         // Property verification: Unknown IP CSV should contain "Bilinmiyor"
         assertTrue(unknownIpCsvContent.contains("Bilinmiyor"), 

@@ -56,11 +56,12 @@ public class SmsServiceImpl implements SmsService {
     }
     
     /**
-     * Formats phone number for SMS API.
-     * Removes leading 0 from Turkish phone numbers (05xxxxxxxxx -> 5xxxxxxxxx)
+     * Formats phone number for VatanSMS API.
+     * VatanSMS expects Turkish mobile numbers without leading 0 and exactly 10 digits
+     * Example: 05551234567 -> 5551234567
      * 
      * @param phoneNumber Raw phone number
-     * @return Formatted phone number
+     * @return Formatted phone number (10 digits, no leading 0)
      */
     private String formatPhoneNumber(String phoneNumber) {
         if (phoneNumber == null || phoneNumber.isEmpty()) {
@@ -70,9 +71,23 @@ public class SmsServiceImpl implements SmsService {
         // Remove all non-digit characters
         String cleaned = phoneNumber.replaceAll("\\D", "");
         
-        // If starts with 0, remove it (Turkish format: 05xxxxxxxxx -> 5xxxxxxxxx)
-        if (cleaned.startsWith("0")) {
+        // Handle different Turkish phone number formats
+        if (cleaned.startsWith("90") && cleaned.length() == 12) {
+            // International format: 905xxxxxxxxx -> 5xxxxxxxxx
+            cleaned = cleaned.substring(2);
+        } else if (cleaned.startsWith("0") && cleaned.length() == 11) {
+            // Turkish format with leading 0: 05xxxxxxxxx -> 5xxxxxxxxx
             cleaned = cleaned.substring(1);
+        } else if (cleaned.startsWith("5") && cleaned.length() == 10) {
+            // Already correct format: 5xxxxxxxxx
+            // No change needed
+        } else {
+            logger.warn("Unexpected phone number format: {}. Using as-is after cleaning.", phoneNumber);
+        }
+        
+        // Validate final format
+        if (!cleaned.matches("^5\\d{9}$")) {
+            logger.warn("Phone number {} does not match expected Turkish mobile format (5xxxxxxxxx)", cleaned);
         }
         
         logger.debug("Formatted phone number: {} -> {}", phoneNumber, cleaned);

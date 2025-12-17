@@ -2,12 +2,16 @@ package com.bidb.personetakip.controller;
 
 import com.bidb.personetakip.dto.DashboardStatsDto;
 import com.bidb.personetakip.service.AdminDashboardService;
+import com.bidb.personetakip.service.IpTrackingInformationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * REST controller for admin dashboard API endpoints.
@@ -22,6 +26,9 @@ public class AdminDashboardController {
     
     @Autowired
     private AdminDashboardService adminDashboardService;
+    
+    @Autowired
+    private IpTrackingInformationService ipTrackingInformationService;
     
     /**
      * Get dashboard statistics.
@@ -46,5 +53,28 @@ public class AdminDashboardController {
     public ResponseEntity<Long> getUserCountByRole(String role) {
         long count = adminDashboardService.getUserCountByRole(role);
         return ResponseEntity.ok(count);
+    }
+    
+    /**
+     * Get IP tracking information for dashboard display.
+     * 
+     * @return IP tracking information and status indicators
+     * Requirements: 6.4 - Clear IP tracking information display
+     */
+    @GetMapping("/ip-tracking/info")
+    public ResponseEntity<Map<String, Object>> getIpTrackingInfo() {
+        Map<String, Object> info = new HashMap<>();
+        
+        info.put("enabled", ipTrackingInformationService.isIpTrackingEnabled());
+        info.put("privacyEnabled", ipTrackingInformationService.isPrivacyModeEnabled());
+        info.put("anonymizeReports", ipTrackingInformationService.isReportAnonymizationEnabled());
+        info.put("statusDisplay", ipTrackingInformationService.getIpTrackingStatusDisplay());
+        info.put("privacyInfo", ipTrackingInformationService.getPrivacyInformationDisplay());
+        info.put("notice", ipTrackingInformationService.getIpTrackingNotice());
+        info.put("statusIndicator", ipTrackingInformationService.getStatusIndicator());
+        info.put("privacyIndicator", ipTrackingInformationService.getPrivacyStatusIndicator());
+        info.put("helpText", ipTrackingInformationService.getIpAssignmentHelpText());
+        
+        return ResponseEntity.ok(info);
     }
 }

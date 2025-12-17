@@ -88,4 +88,45 @@ public interface IpAddressLogRepository extends JpaRepository<IpAddressLog, Long
         @Param("userId") Long userId,
         @Param("since") LocalDateTime since
     );
+    
+    /**
+     * Find logs by timestamp before a certain date (for retention policy)
+     * @param cutoffDate the cutoff date
+     * @return list of logs before the cutoff date
+     */
+    List<IpAddressLog> findByTimestampBefore(LocalDateTime cutoffDate);
+    
+    /**
+     * Delete logs by timestamp before a certain date (for retention policy)
+     * @param cutoffDate the cutoff date
+     */
+    void deleteByTimestampBefore(LocalDateTime cutoffDate);
+    
+    /**
+     * Find logs by user ID and timestamp between dates (for security audit)
+     * @param userId the user ID
+     * @param startDate start date
+     * @param endDate end date
+     * @return list of logs for the user within the date range
+     */
+    List<IpAddressLog> findByUserIdAndTimestampBetweenOrderByTimestampDesc(
+        Long userId, LocalDateTime startDate, LocalDateTime endDate);
+    
+    /**
+     * Find logs by timestamp between dates (for security audit)
+     * @param startDate start date
+     * @param endDate end date
+     * @return list of logs within the date range
+     */
+    List<IpAddressLog> findByTimestampBetweenOrderByTimestampDesc(
+        LocalDateTime startDate, LocalDateTime endDate);
+    
+    /**
+     * Find logs by user ID and timestamp after a certain date (for suspicious access detection)
+     * @param userId the user ID
+     * @param startTime start time
+     * @return list of logs for the user after the start time
+     */
+    List<IpAddressLog> findByUserIdAndTimestampAfterOrderByTimestampDesc(
+        Long userId, LocalDateTime startTime);
 }

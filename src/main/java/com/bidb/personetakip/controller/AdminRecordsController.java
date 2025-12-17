@@ -55,10 +55,11 @@ public class AdminRecordsController {
      * @param userId User ID (optional)
      * @param departmentCode Department code (optional)
      * @param ipAddress IP address filter (optional)
+     * @param ipMismatch IP mismatch filter (optional: "mismatch", "match", "unknown")
      * @param page Page number (default: 0)
      * @param size Page size (default: 20)
      * @return Page of AdminRecordDto objects matching filters
-     * Requirements: 3.3, 3.4, 2.4 - Date range, user, department and IP filtering
+     * Requirements: 3.3, 3.4, 2.4, 4.4 - Date range, user, department, IP and IP mismatch filtering
      */
     @GetMapping("/filter")
     public ResponseEntity<Page<AdminRecordDto>> getRecordsWithFilters(
@@ -67,11 +68,48 @@ public class AdminRecordsController {
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) String departmentCode,
             @RequestParam(required = false) String ipAddress,
+            @RequestParam(required = false) String ipMismatch,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         
         Page<AdminRecordDto> records = adminRecordsService.getRecordsWithFilters(
-                startDate, endDate, userId, departmentCode, ipAddress, page, size);
+                startDate, endDate, userId, departmentCode, ipAddress, ipMismatch, page, size);
+        return ResponseEntity.ok(records);
+    }
+    
+    /**
+     * Get IP address statistics for advanced filtering.
+     * 
+     * @return IP address statistics and common IPs
+     * Requirements: 2.4 - IP address filtering functionality
+     */
+    @GetMapping("/ip-statistics")
+    public ResponseEntity<Map<String, Object>> getIpStatistics() {
+        Map<String, Object> statistics = adminRecordsService.getIpStatistics();
+        return ResponseEntity.ok(statistics);
+    }
+    
+    /**
+     * Search records by IP address with advanced options.
+     * 
+     * @param ipQuery IP search query (supports ranges, CIDR, exact match)
+     * @param ipType IP type filter (ipv4, ipv6, unknown)
+     * @param complianceStatus Compliance status filter
+     * @param page Page number (default: 0)
+     * @param size Page size (default: 20)
+     * @return Page of AdminRecordDto objects matching IP search criteria
+     * Requirements: 2.4 - IP address filtering functionality
+     */
+    @GetMapping("/search-ip")
+    public ResponseEntity<Page<AdminRecordDto>> searchRecordsByIp(
+            @RequestParam String ipQuery,
+            @RequestParam(required = false) String ipType,
+            @RequestParam(required = false) String complianceStatus,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        Page<AdminRecordDto> records = adminRecordsService.searchRecordsByIp(
+                ipQuery, ipType, complianceStatus, page, size);
         return ResponseEntity.ok(records);
     }
     
@@ -124,6 +162,7 @@ public class AdminRecordsController {
      * @param userId User ID (optional)
      * @param departmentCode Department code (optional)
      * @param ipAddress IP address filter (optional)
+     * @param ipMismatch IP mismatch filter (optional)
      * @return CSV file download
      * Requirements: 3.5, 2.5 - CSV export functionality with IP addresses
      */
@@ -133,9 +172,10 @@ public class AdminRecordsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) String departmentCode,
-            @RequestParam(required = false) String ipAddress) {
+            @RequestParam(required = false) String ipAddress,
+            @RequestParam(required = false) String ipMismatch) {
         
-        String csvContent = adminRecordsService.generateCsvExport(startDate, endDate, userId, departmentCode, ipAddress);
+        String csvContent = adminRecordsService.generateCsvExport(startDate, endDate, userId, departmentCode, ipAddress, ipMismatch);
         
         // Generate filename with current date
         String filename = "giris_cikis_kayitlari_" + 
