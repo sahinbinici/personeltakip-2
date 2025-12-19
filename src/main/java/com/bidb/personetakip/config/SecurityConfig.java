@@ -157,8 +157,7 @@ public class SecurityConfig {
                 
                 // Health check endpoints
                 .requestMatchers(
-                    "/actuator/health",
-                    "/actuator/info"
+                    "/health", "/actuator/health", "/actuator/info"
                 ).permitAll()
                 
                 // Swagger UI endpoints - require ADMIN or SUPER_ADMIN role
@@ -229,3 +228,4 @@ public class SecurityConfig {
         return http.build();
     }
 }
+
