@@ -112,6 +112,44 @@ h1 {
     font-size: 13px;
 }
 
+.user-status {
+    margin-top: 12px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.user-status.inside {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.user-status.outside {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+}
+
+.user-status.loading {
+    background: #f3f4f6;
+    color: #6b7280;
+    border: 1px solid #d1d5db;
+}
+
+.status-indicator {
+    font-size: 16px;
+}
+
+.status-text {
+    font-size: 13px;
+}
+
 .qrcode-container {
     min-height: 400px;
     display: flex;

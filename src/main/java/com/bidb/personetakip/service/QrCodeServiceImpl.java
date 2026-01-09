@@ -11,6 +11,7 @@ import com.google.zxing.WriterException;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,10 +27,15 @@ import java.util.Optional;
 @Service
 public class QrCodeServiceImpl implements QrCodeService {
     
-    private static final int MAX_USAGE = 2;
     private static final int QR_CODE_SIZE = 300;
     private final QrCodeRepository qrCodeRepository;
     private final SecureRandom secureRandom;
+    
+    @Value("${qr.code.max-usage-per-day:2}")
+    private int maxUsagePerDay;
+    
+    @Value("${qr.code.development-mode:false}")
+    private boolean developmentMode;
     
     public QrCodeServiceImpl(QrCodeRepository qrCodeRepository) {
         this.qrCodeRepository = qrCodeRepository;
@@ -50,7 +56,7 @@ public class QrCodeServiceImpl implements QrCodeService {
                 qrCode.getQrCodeValue(),
                 qrCode.getValidDate(),
                 qrCode.getUsageCount(),
-                MAX_USAGE
+                maxUsagePerDay
             );
         }
         
@@ -69,7 +75,7 @@ public class QrCodeServiceImpl implements QrCodeService {
             qrCode.getQrCodeValue(),
             qrCode.getValidDate(),
             qrCode.getUsageCount(),
-            MAX_USAGE
+            maxUsagePerDay
         );
     }
     
@@ -95,13 +101,20 @@ public class QrCodeServiceImpl implements QrCodeService {
             return new QrCodeValidationDto(false, "QR code is not valid for today", null);
         }
         
-        // Check usage count
-        if (qrCode.getUsageCount() >= MAX_USAGE) {
-            return new QrCodeValidationDto(false, "QR code has already been used twice", null);
+        // Check usage count (skip in development mode)
+        if (!developmentMode && qrCode.getUsageCount() >= maxUsagePerDay) {
+            return new QrCodeValidationDto(false, "QR code has reached maximum usage limit for today", null);
         }
         
-        // Determine next type
-        EntryExitType nextType = qrCode.getUsageCount() == 0 ? EntryExitType.ENTRY : EntryExitType.EXIT;
+        // Determine next type (in development mode, allow unlimited usage)
+        EntryExitType nextType;
+        if (developmentMode) {
+            // In development mode, alternate between ENTRY and EXIT
+            nextType = qrCode.getUsageCount() % 2 == 0 ? EntryExitType.ENTRY : EntryExitType.EXIT;
+        } else {
+            // Normal mode: first usage is ENTRY, second is EXIT
+            nextType = qrCode.getUsageCount() == 0 ? EntryExitType.ENTRY : EntryExitType.EXIT;
+        }
         
         return new QrCodeValidationDto(true, "QR code is valid", nextType);
     }
@@ -112,7 +125,8 @@ public class QrCodeServiceImpl implements QrCodeService {
         QrCode qrCode = qrCodeRepository.findByQrCodeValue(qrCodeValue)
             .orElseThrow(() -> new ValidationException("QR code not found"));
         
-        if (qrCode.getUsageCount() >= MAX_USAGE) {
+        // Skip usage limit check in development mode
+        if (!developmentMode && qrCode.getUsageCount() >= maxUsagePerDay) {
             throw new ValidationException("QR code usage limit exceeded");
         }
         
@@ -162,6 +176,23 @@ public class QrCodeServiceImpl implements QrCodeService {
             
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 algorithm not available", e);
+        }
+    }
+    
+    @Override
+    @Transactional
+    public void resetUsageCount(Long userId) {
+        if (!developmentMode) {
+            throw new ValidationException("Reset usage count is only available in development mode");
+        }
+        
+        LocalDate today = LocalDate.now();
+        Optional<QrCode> qrCodeOpt = qrCodeRepository.findByUserIdAndValidDate(userId, today);
+        
+        if (qrCodeOpt.isPresent()) {
+            QrCode qrCode = qrCodeOpt.get();
+            qrCode.setUsageCount(0);
+            qrCodeRepository.save(qrCode);
         }
     }
 }

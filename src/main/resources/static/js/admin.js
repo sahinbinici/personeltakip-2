@@ -12,7 +12,7 @@ function checkAdminAuth() {
     
     try {
         const userData = JSON.parse(user);
-        if (userData.role !== 'ADMIN' && userData.role !== 'SUPER_ADMIN') {
+        if (userData.role !== 'ADMIN' && userData.role !== 'DEPARTMENT_ADMIN' && userData.role !== 'SUPER_ADMIN') {
             // User is not admin, redirect to QR code page
             window.location.href = '/qrcode';
             return false;
@@ -23,6 +23,9 @@ function checkAdminAuth() {
         if (adminUserName) {
             adminUserName.textContent = `${userData.firstName} ${userData.lastName}`;
         }
+        
+        // Show/hide department permissions link based on role
+        showDepartmentPermissionsLink(userData.role);
         
         return true;
     } catch (e) {
@@ -124,12 +127,15 @@ function formatDateTime(dateTimeString) {
     if (!dateTimeString) return '--';
     
     const date = new Date(dateTimeString);
+    
+    // Force Turkey timezone display
     return date.toLocaleString('tr-TR', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        timeZone: 'Europe/Istanbul'
     });
 }
 
@@ -218,5 +224,17 @@ function removeMobileMenuButton() {
     const menuBtn = document.getElementById('mobileMenuBtn');
     if (menuBtn) {
         menuBtn.remove();
+    }
+}
+
+// Show/hide department permissions link based on user role
+function showDepartmentPermissionsLink(userRole) {
+    const departmentPermissionsLink = document.getElementById('departmentPermissionsLink');
+    if (departmentPermissionsLink) {
+        if (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') {
+            departmentPermissionsLink.style.display = 'block';
+        } else {
+            departmentPermissionsLink.style.display = 'none';
+        }
     }
 }

@@ -4,6 +4,7 @@ import com.bidb.personetakip.dto.AdminRecordDto;
 import com.bidb.personetakip.model.EntryExitRecord;
 import com.bidb.personetakip.model.EntryExitType;
 import com.bidb.personetakip.model.User;
+import com.bidb.personetakip.model.UserRole;
 import com.bidb.personetakip.repository.EntryExitRecordRepository;
 import com.bidb.personetakip.repository.UserRepository;
 import org.slf4j.Logger;
@@ -14,6 +15,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -48,6 +51,130 @@ public class AdminRecordsService {
     @Autowired
     private IpPrivacyService ipPrivacyService;
     
+    @Autowired
+    private com.bidb.personetakip.repository.DepartmentPermissionRepository departmentPermissionRepository;
+    
+    /**
+     * Get accessible department codes for the authenticated user.
+     * SUPER_ADMIN and ADMIN can access all departments.
+     * DEPARTMENT_ADMIN can access departments they have permissions for.
+     * 
+     * @param authentication Authentication object
+     * @return List of accessible department codes (null means all departments)
+     */
+    private List<String> getAccessibleDepartmentCodes(Authentication authentication) {
+        if (authentication == null) {
+            return null; // Allow all departments if no authentication
+        }
+        
+        // Check if user has SUPER_ADMIN or ADMIN role
+        boolean isSuperAdminOrAdmin = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(role -> role.equals("ROLE_SUPER_ADMIN") || role.equals("ROLE_ADMIN"));
+        
+        if (isSuperAdminOrAdmin) {
+            logger.info("User is SUPER_ADMIN or ADMIN - returning null (all departments)");
+            return null; // Can access all departments
+        }
+        
+        // Check if user has DEPARTMENT_ADMIN role
+        boolean isDepartmentAdmin = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(role -> role.equals("ROLE_DEPARTMENT_ADMIN"));
+        
+        if (isDepartmentAdmin) {
+            // Get user's ID directly from authentication principal (which is the user ID as Long)
+            Long userId = null;
+            Object principal = authentication.getPrincipal();
+            
+            if (principal instanceof Long) {
+                userId = (Long) principal;
+            } else if (principal instanceof String) {
+                try {
+                    userId = Long.parseLong((String) principal);
+                } catch (NumberFormatException e) {
+                    logger.warn("Could not parse principal as Long: {}", principal);
+                }
+            } else if (principal != null) {
+                try {
+                    userId = Long.parseLong(principal.toString());
+                } catch (NumberFormatException e) {
+                    logger.warn("Could not parse principal.toString() as Long: {}", principal);
+                }
+            }
+            
+            logger.info("DEPARTMENT_ADMIN - principal: {}, userId: {}", principal, userId);
+            
+            if (userId != null) {
+                Optional<User> userOpt = userRepository.findById(userId);
+                
+                if (userOpt.isPresent()) {
+                    User user = userOpt.get();
+                    logger.info("Found user with ID: {}, departmentCode: {}, departmentName: {}", 
+                        user.getId(), user.getDepartmentCode(), user.getDepartmentName());
+                    
+                    List<String> permittedDepartments = departmentPermissionRepository.findDepartmentCodesByUserId(user.getId());
+                    logger.info("Permitted departments from DB: {}", permittedDepartments);
+                    
+                    // If permissions found, return them
+                    if (!permittedDepartments.isEmpty()) {
+                        return permittedDepartments;
+                    }
+                    
+                    // Fallback: try user's own department code
+                    String departmentCode = user.getDepartmentCode();
+                    if (departmentCode != null && !departmentCode.isEmpty()) {
+                        logger.info("Falling back to user's departmentCode: {}", departmentCode);
+                        return List.of(departmentCode);
+                    }
+                    
+                    // Fallback: try to find department code by department name
+                    String departmentName = user.getDepartmentName();
+                    if (departmentName != null && !departmentName.isEmpty()) {
+                        logger.info("Trying to find department code by name: {}", departmentName);
+                        // Find department code from other users with same department name
+                        List<User> usersWithSameDept = userRepository.findAll().stream()
+                                .filter(u -> departmentName.equals(u.getDepartmentName()) && 
+                                            u.getDepartmentCode() != null && !u.getDepartmentCode().isEmpty())
+                                .toList();
+                        if (!usersWithSameDept.isEmpty()) {
+                            String foundCode = usersWithSameDept.get(0).getDepartmentCode();
+                            logger.info("Found department code by name: {}", foundCode);
+                            return List.of(foundCode);
+                        }
+                        
+                        // If no code found, use department name as code (for filtering)
+                        logger.info("Using department name as code: {}", departmentName);
+                        return List.of(departmentName);
+                    }
+                    
+                    logger.warn("No department code or name found for user ID: {}", userId);
+                } else {
+                    logger.warn("User not found for ID: {}", userId);
+                }
+            } else {
+                // Fallback: try to find by TC number from authentication name
+                String userIdStr = authentication.getName();
+                logger.info("Trying TC lookup with authentication name: {}", userIdStr);
+                Optional<User> userOpt = userRepository.findByTcNo(userIdStr);
+                if (userOpt.isPresent()) {
+                    User user = userOpt.get();
+                    List<String> permittedDepartments = departmentPermissionRepository.findDepartmentCodesByUserId(user.getId());
+                    if (!permittedDepartments.isEmpty()) {
+                        return permittedDepartments;
+                    }
+                    String departmentCode = user.getDepartmentCode();
+                    if (departmentCode != null && !departmentCode.isEmpty()) {
+                        return List.of(departmentCode);
+                    }
+                }
+                logger.warn("User not found for TC: {}", userIdStr);
+            }
+        }
+        
+        return List.of(); // No accessible departments
+    }
+    
     /**
      * Get paginated list of all entry/exit records.
      * 
@@ -57,8 +184,35 @@ public class AdminRecordsService {
      * Requirements: 3.1 - Paginated record listing
      */
     public Page<AdminRecordDto> getAllRecords(int page, int size) {
+        return getAllRecords(page, size, null);
+    }
+    
+    /**
+     * Get paginated list of all entry/exit records with department filtering.
+     * 
+     * @param page Page number (0-based)
+     * @param size Page size
+     * @param authentication Authentication object for department filtering
+     * @return Page of AdminRecordDto objects
+     * Requirements: 3.1 - Paginated record listing with department filtering
+     */
+    public Page<AdminRecordDto> getAllRecords(int page, int size, Authentication authentication) {
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(authentication);
+        
         Pageable pageable = PageRequest.of(page, size);
-        Page<EntryExitRecord> records = entryExitRecordRepository.findAllByOrderByTimestampDesc(pageable);
+        Page<EntryExitRecord> records;
+        
+        if (accessibleDepartments == null) {
+            // Can access all departments
+            records = entryExitRecordRepository.findAllByOrderByTimestampDesc(pageable);
+        } else if (accessibleDepartments.isEmpty()) {
+            // No accessible departments - return empty page
+            return new PageImpl<>(List.of(), pageable, 0);
+        } else {
+            // Filter by accessible departments
+            records = entryExitRecordRepository.findByUserDepartmentCodesOrderByTimestampDesc(accessibleDepartments, pageable);
+        }
+        
         return records.map(this::convertToAdminRecordDto);
     }
     
@@ -73,12 +227,42 @@ public class AdminRecordsService {
      * Requirements: 3.3 - Date range filtering
      */
     public Page<AdminRecordDto> getRecordsByDateRange(LocalDate startDate, LocalDate endDate, int page, int size) {
+        return getRecordsByDateRange(startDate, endDate, page, size, null);
+    }
+    
+    /**
+     * Get entry/exit records filtered by date range with department filtering.
+     * 
+     * @param startDate Start date (inclusive)
+     * @param endDate End date (inclusive)
+     * @param page Page number (0-based)
+     * @param size Page size
+     * @param authentication Authentication object for department filtering
+     * @return Page of AdminRecordDto objects within date range
+     * Requirements: 3.3 - Date range filtering with department filtering
+     */
+    public Page<AdminRecordDto> getRecordsByDateRange(LocalDate startDate, LocalDate endDate, int page, int size, Authentication authentication) {
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
         
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(authentication);
+        
         Pageable pageable = PageRequest.of(page, size);
-        Page<EntryExitRecord> records = entryExitRecordRepository.findByTimestampBetweenOrderByTimestampDesc(
-                startDateTime, endDateTime, pageable);
+        Page<EntryExitRecord> records;
+        
+        if (accessibleDepartments == null) {
+            // Can access all departments
+            records = entryExitRecordRepository.findByTimestampBetweenOrderByTimestampDesc(
+                    startDateTime, endDateTime, pageable);
+        } else if (accessibleDepartments.isEmpty()) {
+            // No accessible departments - return empty page
+            return new PageImpl<>(List.of(), pageable, 0);
+        } else {
+            // Filter by accessible departments
+            records = entryExitRecordRepository.findByTimestampBetweenAndUserDepartmentCodesOrderByTimestampDesc(
+                    startDateTime, endDateTime, accessibleDepartments, pageable);
+        }
+        
         return records.map(this::convertToAdminRecordDto);
     }
     
@@ -92,6 +276,32 @@ public class AdminRecordsService {
      * Requirements: 3.4 - User-specific record filtering
      */
     public Page<AdminRecordDto> getRecordsByUser(Long userId, int page, int size) {
+        return getRecordsByUser(userId, page, size, null);
+    }
+    
+    /**
+     * Get entry/exit records filtered by user with department filtering.
+     * 
+     * @param userId User ID to filter by
+     * @param page Page number (0-based)
+     * @param size Page size
+     * @param authentication Authentication object for department filtering
+     * @return Page of AdminRecordDto objects for specified user
+     * Requirements: 3.4 - User-specific record filtering with department filtering
+     */
+    public Page<AdminRecordDto> getRecordsByUser(Long userId, int page, int size, Authentication authentication) {
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(authentication);
+        
+        // Check if the user is in an accessible department
+        if (accessibleDepartments != null && !accessibleDepartments.isEmpty()) {
+            Optional<User> userOpt = userRepository.findById(userId);
+            if (userOpt.isEmpty() || !accessibleDepartments.contains(userOpt.get().getDepartmentCode())) {
+                // User not found or not in accessible department - return empty page
+                Pageable pageable = PageRequest.of(page, size);
+                return new PageImpl<>(List.of(), pageable, 0);
+            }
+        }
+        
         Pageable pageable = PageRequest.of(page, size);
         Page<EntryExitRecord> records = entryExitRecordRepository.findByUserIdOrderByTimestampDesc(userId, pageable);
         return records.map(this::convertToAdminRecordDto);
@@ -112,7 +322,39 @@ public class AdminRecordsService {
      */
     public Page<AdminRecordDto> getRecordsWithFilters(LocalDate startDate, LocalDate endDate, 
                                                      Long userId, String departmentCode, String ipAddress, String ipMismatch, int page, int size) {
-        List<EntryExitRecord> allRecords = entryExitRecordRepository.findAll();
+        return getRecordsWithFilters(startDate, endDate, userId, departmentCode, ipAddress, ipMismatch, page, size, null);
+    }
+    
+    /**
+     * Get entry/exit records with combined filters and department filtering.
+     * 
+     * @param startDate Start date (optional)
+     * @param endDate End date (optional)
+     * @param userId User ID (optional)
+     * @param departmentCode Department code (optional)
+     * @param ipAddress IP address filter (optional)
+     * @param ipMismatch IP mismatch filter (optional: "mismatch", "match", "unknown")
+     * @param page Page number (0-based)
+     * @param size Page size
+     * @param authentication Authentication object for department filtering
+     * @return Page of AdminRecordDto objects matching filters
+     */
+    public Page<AdminRecordDto> getRecordsWithFilters(LocalDate startDate, LocalDate endDate, 
+                                                     Long userId, String departmentCode, String ipAddress, String ipMismatch, int page, int size, Authentication authentication) {
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(authentication);
+        
+        List<EntryExitRecord> allRecords;
+        if (accessibleDepartments == null) {
+            // Can access all departments
+            allRecords = entryExitRecordRepository.findAll();
+        } else if (accessibleDepartments.isEmpty()) {
+            // No accessible departments - return empty page
+            Pageable pageable = PageRequest.of(page, size);
+            return new PageImpl<>(List.of(), pageable, 0);
+        } else {
+            // Get records for accessible departments only
+            allRecords = entryExitRecordRepository.findByUserDepartmentCodesOrderByTimestampDesc(accessibleDepartments, PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+        }
         
         // Apply filters
         List<EntryExitRecord> filteredRecords = allRecords.stream()
@@ -132,7 +374,7 @@ public class AdminRecordsService {
                         return false;
                     }
                     
-                    // Department filter
+                    // Department filter (additional filter on top of accessible departments)
                     if (departmentCode != null && !departmentCode.isEmpty()) {
                         Optional<User> userOpt = userRepository.findById(record.getUserId());
                         if (userOpt.isEmpty() || !departmentCode.equals(userOpt.get().getDepartmentCode())) {
@@ -223,7 +465,33 @@ public class AdminRecordsService {
      * Requirements: 4.4 - IP mismatch filtering
      */
     public Page<AdminRecordDto> getRecordsWithIpMismatch(int page, int size) {
-        List<EntryExitRecord> allRecords = entryExitRecordRepository.findAll();
+        return getRecordsWithIpMismatch(page, size, null);
+    }
+    
+    /**
+     * Get entry/exit records with IP mismatch filtering and department filtering.
+     * 
+     * @param page Page number (0-based)
+     * @param size Page size
+     * @param authentication Authentication object for department filtering
+     * @return Page of AdminRecordDto objects with IP mismatches
+     * Requirements: 4.4 - IP mismatch filtering with department filtering
+     */
+    public Page<AdminRecordDto> getRecordsWithIpMismatch(int page, int size, Authentication authentication) {
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(authentication);
+        
+        List<EntryExitRecord> allRecords;
+        if (accessibleDepartments == null) {
+            // Can access all departments
+            allRecords = entryExitRecordRepository.findAll();
+        } else if (accessibleDepartments.isEmpty()) {
+            // No accessible departments - return empty page
+            Pageable pageable = PageRequest.of(page, size);
+            return new PageImpl<>(List.of(), pageable, 0);
+        } else {
+            // Get records for accessible departments only
+            allRecords = entryExitRecordRepository.findByUserDepartmentCodesOrderByTimestampDesc(accessibleDepartments, PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+        }
         
         // Filter for IP mismatches
         List<EntryExitRecord> mismatchRecords = allRecords.stream()
@@ -259,7 +527,36 @@ public class AdminRecordsService {
      * Requirements: 3.5 - CSV export functionality
      */
     public String generateCsvExport(LocalDate startDate, LocalDate endDate, Long userId, String departmentCode, String ipAddress, String ipMismatch) {
-        List<EntryExitRecord> records = entryExitRecordRepository.findAll();
+        return generateCsvExport(startDate, endDate, userId, departmentCode, ipAddress, ipMismatch, null);
+    }
+    
+    /**
+     * Generate CSV export data for records with department filtering.
+     * 
+     * @param startDate Start date (optional)
+     * @param endDate End date (optional)
+     * @param userId User ID (optional)
+     * @param departmentCode Department code (optional)
+     * @param ipAddress IP address filter (optional)
+     * @param ipMismatch IP mismatch filter (optional)
+     * @param authentication Authentication object for department filtering
+     * @return CSV content as string
+     * Requirements: 3.5 - CSV export functionality with department filtering
+     */
+    public String generateCsvExport(LocalDate startDate, LocalDate endDate, Long userId, String departmentCode, String ipAddress, String ipMismatch, Authentication authentication) {
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(authentication);
+        
+        List<EntryExitRecord> records;
+        if (accessibleDepartments == null) {
+            // Can access all departments
+            records = entryExitRecordRepository.findAll();
+        } else if (accessibleDepartments.isEmpty()) {
+            // No accessible departments - return empty CSV
+            return "Tarih,Saat,TC Kimlik No,Ad Soyad,Sicil No,Departman,Tür,QR Kod,IP Adresi,IP Uyumluluk,IP Mismatch,Atanmış IP'ler,Enlem,Boylam\n";
+        } else {
+            // Get records for accessible departments only
+            records = entryExitRecordRepository.findByUserDepartmentCodesOrderByTimestampDesc(accessibleDepartments, PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+        }
         
         // Apply filters
         List<EntryExitRecord> filteredRecords = records.stream()
@@ -279,7 +576,7 @@ public class AdminRecordsService {
                         return false;
                     }
                     
-                    // Department filter
+                    // Department filter (additional filter on top of accessible departments)
                     if (departmentCode != null && !departmentCode.isEmpty()) {
                         Optional<User> userOpt = userRepository.findById(record.getUserId());
                         if (userOpt.isEmpty() || !departmentCode.equals(userOpt.get().getDepartmentCode())) {
@@ -445,24 +742,61 @@ public class AdminRecordsService {
      * Requirements: 3.6 - Daily summary statistics
      */
     public DailySummaryStats getDailySummaryStats(LocalDate date) {
+        return getDailySummaryStats(date, null);
+    }
+    
+    /**
+     * Get daily summary statistics with department filtering.
+     * 
+     * @param date Date to get statistics for
+     * @param authentication Authentication object for department filtering
+     * @return Daily summary statistics
+     * Requirements: 3.6 - Daily summary statistics with department filtering
+     */
+    public DailySummaryStats getDailySummaryStats(LocalDate date, Authentication authentication) {
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(23, 59, 59);
         
-        long totalRecords = entryExitRecordRepository.countByTimestampBetween(startOfDay, endOfDay);
-        long entryCount = entryExitRecordRepository.countByTypeAndTimestampBetween(EntryExitType.ENTRY, startOfDay, endOfDay);
-        long exitCount = entryExitRecordRepository.countByTypeAndTimestampBetween(EntryExitType.EXIT, startOfDay, endOfDay);
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(authentication);
         
-        // Get unique users count
-        List<EntryExitRecord> dayRecords = entryExitRecordRepository.findAll()
-                .stream()
-                .filter(record -> !record.getTimestamp().isBefore(startOfDay) && 
-                                !record.getTimestamp().isAfter(endOfDay))
-                .collect(Collectors.toList());
+        long totalRecords = 0;
+        long entryCount = 0;
+        long exitCount = 0;
+        long uniqueUsers = 0;
         
-        long uniqueUsers = dayRecords.stream()
-                .map(EntryExitRecord::getUserId)
-                .distinct()
-                .count();
+        if (accessibleDepartments == null) {
+            // Can access all departments
+            totalRecords = entryExitRecordRepository.countByTimestampBetween(startOfDay, endOfDay);
+            entryCount = entryExitRecordRepository.countByTypeAndTimestampBetween(EntryExitType.ENTRY, startOfDay, endOfDay);
+            exitCount = entryExitRecordRepository.countByTypeAndTimestampBetween(EntryExitType.EXIT, startOfDay, endOfDay);
+            
+            // Get unique users count
+            List<EntryExitRecord> dayRecords = entryExitRecordRepository.findAll()
+                    .stream()
+                    .filter(record -> !record.getTimestamp().isBefore(startOfDay) && 
+                                    !record.getTimestamp().isAfter(endOfDay))
+                    .collect(Collectors.toList());
+            
+            uniqueUsers = dayRecords.stream()
+                    .map(EntryExitRecord::getUserId)
+                    .distinct()
+                    .count();
+        } else if (!accessibleDepartments.isEmpty()) {
+            // Filter by accessible departments
+            totalRecords = entryExitRecordRepository.countByTimestampBetweenAndUserDepartmentCodes(startOfDay, endOfDay, accessibleDepartments);
+            entryCount = entryExitRecordRepository.countByTypeAndTimestampBetweenAndUserDepartmentCodes(EntryExitType.ENTRY, startOfDay, endOfDay, accessibleDepartments);
+            exitCount = entryExitRecordRepository.countByTypeAndTimestampBetweenAndUserDepartmentCodes(EntryExitType.EXIT, startOfDay, endOfDay, accessibleDepartments);
+            
+            // Get unique users count for accessible departments
+            List<EntryExitRecord> dayRecords = entryExitRecordRepository.findByTimestampBetweenAndUserDepartmentCodesOrderByTimestampDesc(
+                    startOfDay, endOfDay, accessibleDepartments, PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+            
+            uniqueUsers = dayRecords.stream()
+                    .map(EntryExitRecord::getUserId)
+                    .distinct()
+                    .count();
+        }
+        // If accessibleDepartments is empty, all counts remain 0
         
         return DailySummaryStats.builder()
                 .date(date)
@@ -479,10 +813,52 @@ public class AdminRecordsService {
      * @return List of department codes and names
      */
     public List<Map<String, String>> getDepartments() {
+        return getDepartments(null);
+    }
+    
+    /**
+     * Get list of departments for filtering with department filtering.
+     * 
+     * @param authentication Authentication object for department filtering
+     * @return List of department codes and names
+     */
+    public List<Map<String, String>> getDepartments(Authentication authentication) {
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(authentication);
+        
+        logger.info("getDepartments - accessibleDepartments: {}", accessibleDepartments);
+        
         List<User> users = userRepository.findAll();
+        
+        // Log all unique department codes and names for debugging
+        List<String> allDeptCodes = users.stream()
+                .filter(u -> u.getDepartmentCode() != null && !u.getDepartmentCode().isEmpty())
+                .map(User::getDepartmentCode)
+                .distinct()
+                .toList();
+        logger.info("getDepartments - all department codes in users table: {}", allDeptCodes);
         
         return users.stream()
                 .filter(user -> user.getDepartmentCode() != null && !user.getDepartmentCode().isEmpty())
+                .filter(user -> {
+                    // Filter by accessible departments
+                    if (accessibleDepartments == null) {
+                        return true; // Can access all departments
+                    } else if (accessibleDepartments.isEmpty()) {
+                        return false; // No accessible departments
+                    } else {
+                        // Check if department code or department name matches
+                        boolean codeMatch = accessibleDepartments.contains(user.getDepartmentCode());
+                        boolean nameMatch = user.getDepartmentName() != null && 
+                                           accessibleDepartments.contains(user.getDepartmentName());
+                        
+                        if (codeMatch || nameMatch) {
+                            logger.debug("getDepartments - user {} matched: codeMatch={}, nameMatch={}", 
+                                user.getId(), codeMatch, nameMatch);
+                        }
+                        
+                        return codeMatch || nameMatch;
+                    }
+                })
                 .collect(Collectors.groupingBy(User::getDepartmentCode))
                 .entrySet().stream()
                 .map(entry -> {
@@ -496,6 +872,7 @@ public class AdminRecordsService {
                     Map<String, String> department = new HashMap<>();
                     department.put("code", departmentCode);
                     department.put("name", departmentName);
+                    logger.info("getDepartments - returning department: code={}, name={}", departmentCode, departmentName);
                     return department;
                 })
                 .sorted((d1, d2) -> d1.get("name").compareTo(d2.get("name")))
@@ -509,7 +886,30 @@ public class AdminRecordsService {
      * Requirements: 2.4 - IP address filtering functionality
      */
     public Map<String, Object> getIpStatistics() {
-        List<EntryExitRecord> allRecords = entryExitRecordRepository.findAll();
+        return getIpStatistics(null);
+    }
+    
+    /**
+     * Get IP address statistics for advanced filtering with department filtering.
+     * 
+     * @param authentication Authentication object for department filtering
+     * @return Map containing IP statistics and common IP addresses
+     * Requirements: 2.4 - IP address filtering functionality with department filtering
+     */
+    public Map<String, Object> getIpStatistics(Authentication authentication) {
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(authentication);
+        
+        List<EntryExitRecord> allRecords;
+        if (accessibleDepartments == null) {
+            // Can access all departments
+            allRecords = entryExitRecordRepository.findAll();
+        } else if (accessibleDepartments.isEmpty()) {
+            // No accessible departments - return empty statistics
+            allRecords = List.of();
+        } else {
+            // Get records for accessible departments only
+            allRecords = entryExitRecordRepository.findByUserDepartmentCodesOrderByTimestampDesc(accessibleDepartments, PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+        }
         
         Map<String, Object> statistics = new HashMap<>();
         
@@ -597,7 +997,36 @@ public class AdminRecordsService {
      * Requirements: 2.4 - IP address filtering functionality
      */
     public Page<AdminRecordDto> searchRecordsByIp(String ipQuery, String ipType, String complianceStatus, int page, int size) {
-        List<EntryExitRecord> allRecords = entryExitRecordRepository.findAll();
+        return searchRecordsByIp(ipQuery, ipType, complianceStatus, page, size, null);
+    }
+    
+    /**
+     * Search records by IP address with advanced options and department filtering.
+     * 
+     * @param ipQuery IP search query (supports ranges, CIDR, exact match)
+     * @param ipType IP type filter (ipv4, ipv6, unknown)
+     * @param complianceStatus Compliance status filter
+     * @param page Page number (0-based)
+     * @param size Page size
+     * @param authentication Authentication object for department filtering
+     * @return Page of AdminRecordDto objects matching IP search criteria
+     * Requirements: 2.4 - IP address filtering functionality with department filtering
+     */
+    public Page<AdminRecordDto> searchRecordsByIp(String ipQuery, String ipType, String complianceStatus, int page, int size, Authentication authentication) {
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(authentication);
+        
+        List<EntryExitRecord> allRecords;
+        if (accessibleDepartments == null) {
+            // Can access all departments
+            allRecords = entryExitRecordRepository.findAll();
+        } else if (accessibleDepartments.isEmpty()) {
+            // No accessible departments - return empty page
+            Pageable pageable = PageRequest.of(page, size);
+            return new PageImpl<>(List.of(), pageable, 0);
+        } else {
+            // Get records for accessible departments only
+            allRecords = entryExitRecordRepository.findByUserDepartmentCodesOrderByTimestampDesc(accessibleDepartments, PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+        }
         
         List<EntryExitRecord> filteredRecords = allRecords.stream()
                 .filter(record -> {

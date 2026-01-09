@@ -1,6 +1,7 @@
 package com.bidb.personetakip.controller;
 
 import com.bidb.personetakip.dto.AdminUserDto;
+import com.bidb.personetakip.dto.DepartmentDto;
 import com.bidb.personetakip.security.JwtAuthenticationFilter;
 import com.bidb.personetakip.service.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,6 +20,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -29,7 +31,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/admin/users")
-@PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+@PreAuthorize("hasRole('ADMIN') or hasRole('DEPARTMENT_ADMIN') or hasRole('SUPER_ADMIN')")
 @Tag(name = "Admin - User Management", description = "Admin endpoints for user management, role updates, and IP assignments")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminUserController {
@@ -80,9 +82,30 @@ public class AdminUserController {
             @Parameter(description = "Page number (0-based)", example = "0")
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size", example = "20")
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
         
-        Page<AdminUserDto> users = adminUserService.getAllUsers(page, size);
+        // Get admin user details from authentication
+        Long adminUserId = (Long) authentication.getPrincipal();
+        String adminRole = null;
+        String adminDepartmentCode = null;
+        
+        // Extract role from authentication details
+        if (authentication.getDetails() instanceof JwtAuthenticationFilter.JwtAuthenticationDetails) {
+            JwtAuthenticationFilter.JwtAuthenticationDetails details = 
+                (JwtAuthenticationFilter.JwtAuthenticationDetails) authentication.getDetails();
+            adminRole = details.getRole();
+        }
+        
+        // Get admin user's department if they are a department admin
+        if ("DEPARTMENT_ADMIN".equals(adminRole)) {
+            AdminUserDto adminUser = adminUserService.getUserById(adminUserId);
+            if (adminUser != null) {
+                adminDepartmentCode = adminUser.getDepartmentCode();
+            }
+        }
+        
+        Page<AdminUserDto> users = adminUserService.getAllUsersWithDepartmentFilter(page, size, adminUserId, adminRole, adminDepartmentCode);
         return ResponseEntity.ok(users);
     }
     
@@ -99,9 +122,30 @@ public class AdminUserController {
     public ResponseEntity<Page<AdminUserDto>> searchUsers(
             @RequestParam String searchTerm,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
         
-        Page<AdminUserDto> users = adminUserService.searchUsers(searchTerm, page, size);
+        // Get admin user details from authentication
+        Long adminUserId = (Long) authentication.getPrincipal();
+        String adminRole = null;
+        String adminDepartmentCode = null;
+        
+        // Extract role from authentication details
+        if (authentication.getDetails() instanceof JwtAuthenticationFilter.JwtAuthenticationDetails) {
+            JwtAuthenticationFilter.JwtAuthenticationDetails details = 
+                (JwtAuthenticationFilter.JwtAuthenticationDetails) authentication.getDetails();
+            adminRole = details.getRole();
+        }
+        
+        // Get admin user's department if they are a department admin
+        if ("DEPARTMENT_ADMIN".equals(adminRole)) {
+            AdminUserDto adminUser = adminUserService.getUserById(adminUserId);
+            if (adminUser != null) {
+                adminDepartmentCode = adminUser.getDepartmentCode();
+            }
+        }
+        
+        Page<AdminUserDto> users = adminUserService.searchUsersWithDepartmentFilter(searchTerm, page, size, adminUserId, adminRole, adminDepartmentCode);
         return ResponseEntity.ok(users);
     }
     
@@ -152,7 +196,7 @@ public class AdminUserController {
      */
     @Operation(
         summary = "Update user role",
-        description = "Updates the role of a specific user (NORMAL_USER, ADMIN, SUPER_ADMIN)"
+        description = "Updates the role of a specific user (NORMAL_USER, ADMIN, SUPER_ADMIN). Only ADMIN and SUPER_ADMIN can change roles."
     )
     @ApiResponses(value = {
         @ApiResponse(
@@ -179,6 +223,21 @@ public class AdminUserController {
             )
         ),
         @ApiResponse(
+            responseCode = "403",
+            description = "Access denied - Only ADMIN and SUPER_ADMIN can change roles",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "Access Denied",
+                    value = """
+                    {
+                        "message": "Access denied - Only ADMIN and SUPER_ADMIN can change roles"
+                    }
+                    """
+                )
+            )
+        ),
+        @ApiResponse(
             responseCode = "404",
             description = "User not found",
             content = @Content(
@@ -194,8 +253,9 @@ public class AdminUserController {
             )
         )
     })
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     @PutMapping("/{userId}/role")
-    public ResponseEntity<AdminUserDto> updateUserRole(
+    public ResponseEntity<?> updateUserRole(
             @Parameter(description = "User ID to update", required = true, example = "123")
             @PathVariable Long userId,
             @Parameter(description = "Request body containing new role", required = true)
@@ -204,12 +264,12 @@ public class AdminUserController {
         
         String newRole = request.get("role");
         if (newRole == null || newRole.trim().isEmpty()) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(Map.of("message", "Role is required"));
         }
         
         // Validate role
         if (!isValidRole(newRole)) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(Map.of("message", "Invalid role specified"));
         }
         
         // Get admin user ID from authentication
@@ -217,7 +277,7 @@ public class AdminUserController {
         
         AdminUserDto updatedUser = adminUserService.updateUserRole(userId, newRole, adminUserId);
         if (updatedUser == null) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(404).body(Map.of("message", "User not found"));
         }
         
         return ResponseEntity.ok(updatedUser);
@@ -290,6 +350,56 @@ public class AdminUserController {
         return ResponseEntity.ok(stats);
     }
     
+    /**
+     * Get all departments with user counts.
+     * 
+     * @param authentication Authentication object for department filtering
+     * @return List of departments
+     */
+    @GetMapping("/departments")
+    public ResponseEntity<java.util.List<com.bidb.personetakip.dto.DepartmentDto>> getAllDepartments(Authentication authentication) {
+        // Get admin user details from authentication
+        Long adminUserId = (Long) authentication.getPrincipal();
+        String adminRole = null;
+        String adminDepartmentCode = null;
+        
+        // Extract role from authentication details
+        if (authentication.getDetails() instanceof JwtAuthenticationFilter.JwtAuthenticationDetails) {
+            JwtAuthenticationFilter.JwtAuthenticationDetails details = 
+                (JwtAuthenticationFilter.JwtAuthenticationDetails) authentication.getDetails();
+            adminRole = details.getRole();
+        }
+        
+        // Get admin user's department if they are a department admin
+        if ("DEPARTMENT_ADMIN".equals(adminRole)) {
+            AdminUserDto adminUser = adminUserService.getUserById(adminUserId);
+            if (adminUser != null) {
+                adminDepartmentCode = adminUser.getDepartmentCode();
+            }
+        }
+        
+        java.util.List<com.bidb.personetakip.dto.DepartmentDto> departments = adminUserService.getAllDepartmentsWithFilter(adminUserId, adminRole, adminDepartmentCode);
+        return ResponseEntity.ok(departments);
+    }
+    
+    /**
+     * Get users by attendance status.
+     * 
+     * @param attendanceStatus "NO_RECORDS", "INSIDE", "OUTSIDE"
+     * @param page Page number (default: 0)
+     * @param size Page size (default: 20)
+     * @return Page of users matching attendance status
+     */
+    @GetMapping("/attendance-filter")
+    public ResponseEntity<Page<AdminUserDto>> getUsersByAttendanceStatus(
+            @RequestParam String attendanceStatus,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        Page<AdminUserDto> users = adminUserService.getUsersByAttendanceStatus(attendanceStatus, page, size);
+        return ResponseEntity.ok(users);
+    }
+    
     
     /**
      * Validate if role is valid.
@@ -298,6 +408,6 @@ public class AdminUserController {
      * @return true if valid
      */
     private boolean isValidRole(String role) {
-        return "NORMAL_USER".equals(role) || "ADMIN".equals(role) || "SUPER_ADMIN".equals(role);
+        return "NORMAL_USER".equals(role) || "DEPARTMENT_ADMIN".equals(role) || "ADMIN".equals(role) || "SUPER_ADMIN".equals(role);
     }
 }

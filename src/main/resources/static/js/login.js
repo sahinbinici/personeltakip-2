@@ -14,7 +14,7 @@
             
             // Choose appropriate API endpoint based on user role
             let testEndpoint = '/api/qrcode/daily'; // Default for normal users
-            if (userData.role === 'ADMIN' || userData.role === 'SUPER_ADMIN') {
+            if (userData.role === 'ADMIN' || userData.role === 'DEPARTMENT_ADMIN' || userData.role === 'SUPER_ADMIN') {
                 testEndpoint = '/api/admin/dashboard/stats';
             }
             
@@ -29,8 +29,7 @@
             
             if (response.ok) {
                 // Token is valid, redirect based on role
-                console.log('Valid token found, redirecting user');
-                if (userData.role === 'ADMIN' || userData.role === 'SUPER_ADMIN') {
+                if (userData.role === 'ADMIN' || userData.role === 'DEPARTMENT_ADMIN' || userData.role === 'SUPER_ADMIN') {
                     window.location.href = '/admin/dashboard';
                 } else {
                     window.location.href = '/qrcode';
@@ -178,7 +177,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
             document.cookie = `jwt=${data.token}; path=/; max-age=1800; SameSite=Lax`;
             
             // Redirect based on user role
-            if (data.user.role === 'ADMIN' || data.user.role === 'SUPER_ADMIN') {
+            if (data.user.role === 'ADMIN' || data.user.role === 'DEPARTMENT_ADMIN' || data.user.role === 'SUPER_ADMIN') {
                 window.location.href = '/admin/dashboard';
             } else {
                 window.location.href = '/qrcode';

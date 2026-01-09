@@ -30,6 +30,75 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
     window.location.href = '/login';
 });
 
+// Fetch user status
+async function fetchUserStatus() {
+    const token = localStorage.getItem('authToken');
+    const tokenType = localStorage.getItem('tokenType') || 'Bearer';
+    
+    try {
+        const response = await fetch('/api/mobil/durum', {
+            method: 'GET',
+            headers: {
+                'Authorization': `${tokenType} ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.status === 401) {
+            // Token expired or invalid
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('tokenType');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+            return null;
+        }
+        
+        if (!response.ok) {
+            throw new Error('Kullanıcı durumu alınamadı');
+        }
+        
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error fetching user status:', error);
+        throw error;
+    }
+}
+
+// Display user status
+function displayUserStatus(statusData) {
+    const statusElement = document.getElementById('userStatus');
+    const indicatorElement = document.getElementById('statusIndicator');
+    const textElement = document.getElementById('statusText');
+    
+    if (statusData) {
+        if (statusData.isInside) {
+            statusElement.className = 'user-status inside';
+            indicatorElement.textContent = '🟢';
+            textElement.textContent = 'İçerisiniz';
+        } else {
+            statusElement.className = 'user-status outside';
+            indicatorElement.textContent = '🔴';
+            textElement.textContent = 'Dışarıdasınız';
+        }
+    } else {
+        statusElement.className = 'user-status loading';
+        indicatorElement.textContent = '⚠️';
+        textElement.textContent = 'Durum alınamadı';
+    }
+}
+
+// Load user status
+async function loadUserStatus() {
+    try {
+        const statusData = await fetchUserStatus();
+        displayUserStatus(statusData);
+    } catch (error) {
+        console.error('Error loading user status:', error);
+        displayUserStatus(null);
+    }
+}
+
 // Fetch QR code data
 async function fetchQrCode() {
     const token = localStorage.getItem('authToken');
@@ -167,7 +236,7 @@ document.getElementById('refreshBtn').addEventListener('click', async () => {
     spinner.style.display = 'inline-block';
     
     try {
-        await loadQrCode();
+        await Promise.all([loadQrCode(), loadUserStatus()]);
     } finally {
         button.disabled = false;
         btnText.style.display = 'inline';
@@ -178,6 +247,7 @@ document.getElementById('refreshBtn').addEventListener('click', async () => {
 // Retry button handler
 document.getElementById('retryBtn').addEventListener('click', () => {
     loadQrCode();
+    loadUserStatus();
 });
 
 // Check if it's a new day and refresh QR code
@@ -188,6 +258,7 @@ function checkForNewDay() {
     if (lastCheckDate !== today) {
         localStorage.setItem('lastQrCodeDate', today);
         loadQrCode();
+        loadUserStatus();
     }
 }
 
@@ -202,6 +273,7 @@ function scheduleNextDayRefresh() {
     
     setTimeout(() => {
         loadQrCode();
+        loadUserStatus();
         // Schedule next refresh
         scheduleNextDayRefresh();
     }, timeUntilMidnight);
@@ -214,10 +286,19 @@ function startPeriodicCheck() {
     }, 5 * 60 * 1000); // Check every 5 minutes
 }
 
+// Periodic status update (every 30 seconds)
+function startStatusUpdate() {
+    setInterval(() => {
+        loadUserStatus();
+    }, 30 * 1000); // Update status every 30 seconds
+}
+
 // Initialize page
 if (checkAuthentication()) {
     displayUserInfo();
+    loadUserStatus();
     loadQrCode();
     scheduleNextDayRefresh();
     startPeriodicCheck();
+    startStatusUpdate();
 }

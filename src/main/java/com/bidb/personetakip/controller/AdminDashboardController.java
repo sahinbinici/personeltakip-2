@@ -6,6 +6,7 @@ import com.bidb.personetakip.service.IpTrackingInformationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,7 +22,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/admin/dashboard")
-@PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+@PreAuthorize("hasRole('ADMIN') or hasRole('DEPARTMENT_ADMIN') or hasRole('SUPER_ADMIN')")
 public class AdminDashboardController {
     
     @Autowired
@@ -33,13 +34,14 @@ public class AdminDashboardController {
     /**
      * Get dashboard statistics.
      * 
+     * @param authentication Authentication object for department filtering
      * @return Dashboard statistics DTO
      * Requirements: 1.2 - Display total user count, today's entry/exit count, and recent activity summary
      *               4.4 - JWT role validation for all admin endpoints
      */
     @GetMapping("/stats")
-    public ResponseEntity<DashboardStatsDto> getDashboardStats() {
-        DashboardStatsDto stats = adminDashboardService.getDashboardStats();
+    public ResponseEntity<DashboardStatsDto> getDashboardStats(Authentication authentication) {
+        DashboardStatsDto stats = adminDashboardService.getDashboardStats(authentication);
         return ResponseEntity.ok(stats);
     }
     

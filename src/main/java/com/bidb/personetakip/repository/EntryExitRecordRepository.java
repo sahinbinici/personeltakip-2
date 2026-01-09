@@ -218,4 +218,79 @@ public interface EntryExitRecordRepository extends JpaRepository<EntryExitRecord
         @Param("startDate") LocalDateTime startDate,
         @Param("endDate") LocalDateTime endDate
     );
+    
+    /**
+     * Delete all entry/exit records for a user
+     * @param userId User ID
+     */
+    void deleteByUserId(Long userId);
+    
+    // Department-based filtering methods
+    
+    /**
+     * Find all entry/exit records for users in specific departments
+     * @param departmentCodes List of department codes
+     * @param pageable Pagination information
+     * @return Page of entry/exit records for users in specified departments
+     */
+    @Query("SELECT e FROM EntryExitRecord e JOIN User u ON e.userId = u.id WHERE u.departmentCode IN :departmentCodes ORDER BY e.timestamp DESC")
+    Page<EntryExitRecord> findByUserDepartmentCodesOrderByTimestampDesc(@Param("departmentCodes") List<String> departmentCodes, Pageable pageable);
+    
+    /**
+     * Find entry/exit records by date range for users in specific departments
+     * @param startDate Start date/time
+     * @param endDate End date/time
+     * @param departmentCodes List of department codes
+     * @param pageable Pagination information
+     * @return Page of entry/exit records within date range for users in specified departments
+     */
+    @Query("SELECT e FROM EntryExitRecord e JOIN User u ON e.userId = u.id WHERE e.timestamp BETWEEN :startDate AND :endDate AND u.departmentCode IN :departmentCodes ORDER BY e.timestamp DESC")
+    Page<EntryExitRecord> findByTimestampBetweenAndUserDepartmentCodesOrderByTimestampDesc(
+        @Param("startDate") LocalDateTime startDate,
+        @Param("endDate") LocalDateTime endDate,
+        @Param("departmentCodes") List<String> departmentCodes,
+        Pageable pageable
+    );
+    
+    /**
+     * Find recent records for users in specific departments
+     * @param timestamp Timestamp to search after
+     * @param departmentCodes List of department codes
+     * @return List of recent records for users in specified departments (max 10)
+     */
+    @Query("SELECT e FROM EntryExitRecord e JOIN User u ON e.userId = u.id WHERE e.timestamp > :timestamp AND u.departmentCode IN :departmentCodes ORDER BY e.timestamp DESC")
+    List<EntryExitRecord> findTop10ByTimestampAfterAndUserDepartmentCodesOrderByTimestampDesc(
+        @Param("timestamp") LocalDateTime timestamp,
+        @Param("departmentCodes") List<String> departmentCodes
+    );
+    
+    /**
+     * Count records by type within date range for users in specific departments
+     * @param type Entry or Exit type
+     * @param startDate Start date/time
+     * @param endDate End date/time
+     * @param departmentCodes List of department codes
+     * @return Count of records for users in specified departments
+     */
+    @Query("SELECT COUNT(e) FROM EntryExitRecord e JOIN User u ON e.userId = u.id WHERE e.type = :type AND e.timestamp BETWEEN :startDate AND :endDate AND u.departmentCode IN :departmentCodes")
+    long countByTypeAndTimestampBetweenAndUserDepartmentCodes(
+        @Param("type") EntryExitType type,
+        @Param("startDate") LocalDateTime startDate,
+        @Param("endDate") LocalDateTime endDate,
+        @Param("departmentCodes") List<String> departmentCodes
+    );
+    
+    /**
+     * Count all records within date range for users in specific departments
+     * @param startDate Start date/time
+     * @param endDate End date/time
+     * @param departmentCodes List of department codes
+     * @return Count of records for users in specified departments
+     */
+    @Query("SELECT COUNT(e) FROM EntryExitRecord e JOIN User u ON e.userId = u.id WHERE e.timestamp BETWEEN :startDate AND :endDate AND u.departmentCode IN :departmentCodes")
+    long countByTimestampBetweenAndUserDepartmentCodes(
+        @Param("startDate") LocalDateTime startDate,
+        @Param("endDate") LocalDateTime endDate,
+        @Param("departmentCodes") List<String> departmentCodes
+    );
 }

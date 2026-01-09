@@ -63,6 +63,6 @@
         </div>
     </div>
 
-    <script th:src="@{/js/login.js}"></script>
+    <script th:src="@{/js/login.js(v=${#dates.format(#dates.createNow(), 'yyyyMMddHHmmss')})}"></script>
 </body>
 </html>

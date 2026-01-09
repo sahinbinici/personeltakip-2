@@ -2,7 +2,7 @@ package com.bidb.personetakip.model;
 
 /**
  * Enum representing user roles in the system.
- * Currently supports NORMAL_USER, with ADMIN and SUPER_ADMIN prepared for future implementation.
+ * Supports hierarchical admin roles with department-based permissions.
  */
 public enum UserRole {
     /**
@@ -11,12 +11,17 @@ public enum UserRole {
     NORMAL_USER,
     
     /**
-     * Admin - management and reporting capabilities (future implementation)
+     * Department Admin - management capabilities for specific department only
+     */
+    DEPARTMENT_ADMIN,
+    
+    /**
+     * Admin - management and reporting capabilities for all departments
      */
     ADMIN,
     
     /**
-     * Super Admin - full system configuration rights (future implementation)
+     * Super Admin - full system configuration rights
      */
     SUPER_ADMIN
 }

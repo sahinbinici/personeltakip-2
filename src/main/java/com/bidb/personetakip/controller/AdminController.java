@@ -7,13 +7,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
  * Controller for serving admin HTML pages.
- * All endpoints require ADMIN or SUPER_ADMIN role.
+ * All endpoints require ADMIN, DEPARTMENT_ADMIN, or SUPER_ADMIN role.
  * 
  * Requirements: 1.1, 1.3, 4.1, 4.5 - Admin role-based routing and access control
  */
 @Controller
 @RequestMapping("/admin")
-@PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+@PreAuthorize("hasRole('ADMIN') or hasRole('DEPARTMENT_ADMIN') or hasRole('SUPER_ADMIN')")
 public class AdminController {
     
     /**
@@ -47,5 +47,17 @@ public class AdminController {
     @GetMapping("/records")
     public String records() {
         return "admin-records";
+    }
+    
+    /**
+     * Serves the department permissions management page.
+     * Only ADMIN and SUPER_ADMIN can access this page.
+     * 
+     * @return department permissions template name
+     */
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    @GetMapping("/department-permissions")
+    public String departmentPermissions() {
+        return "admin-department-permissions";
     }
 }

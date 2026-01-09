@@ -135,7 +135,9 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/api/register/**",
                     "/api/auth/login",
-                    "/api/mobil/login"
+                    "/api/mobil/login",
+                    "/api/mobil/dev-create-test-user",
+                    "/api/mobil/dev-create-department-admin"
                 ).permitAll()
                 
                 // Public web pages
@@ -174,10 +176,10 @@ public class SecurityConfig {
                     "/qrcode"
                 ).permitAll()  // Allow access but WebController handles authentication redirect
                 
-                // Admin pages - require ADMIN or SUPER_ADMIN role
+                // Admin pages - require ADMIN, DEPARTMENT_ADMIN or SUPER_ADMIN role
                 .requestMatchers(
                     "/admin/**"
-                ).hasAnyRole("ADMIN", "SUPER_ADMIN")
+                ).hasAnyRole("ADMIN", "DEPARTMENT_ADMIN", "SUPER_ADMIN")
                 
                 // Protected API endpoints - require authentication
                 // QR code API endpoints
@@ -190,10 +192,10 @@ public class SecurityConfig {
                     "/api/mobil/giris-cikis-kaydet"
                 ).authenticated()
                 
-                // Admin API endpoints - require ADMIN or SUPER_ADMIN role
+                // Admin API endpoints - require ADMIN, DEPARTMENT_ADMIN or SUPER_ADMIN role
                 .requestMatchers(
                     "/api/admin/**"
-                ).hasAnyRole("ADMIN", "SUPER_ADMIN")
+                ).hasAnyRole("ADMIN", "DEPARTMENT_ADMIN", "SUPER_ADMIN")
                 
                 // All other endpoints require authentication
                 .anyRequest().authenticated()

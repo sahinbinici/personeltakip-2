@@ -2,6 +2,7 @@ package com.bidb.personetakip.service;
 
 import com.bidb.personetakip.dto.EntryExitRecordDto;
 import com.bidb.personetakip.dto.QrCodeValidationDto;
+import com.bidb.personetakip.dto.UserStatusDto;
 import com.bidb.personetakip.exception.ValidationException;
 import com.bidb.personetakip.model.EntryExitRecord;
 import com.bidb.personetakip.model.EntryExitType;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class EntryExitServiceImpl implements EntryExitService {
@@ -115,9 +117,40 @@ public class EntryExitServiceImpl implements EntryExitService {
         QrCode qrCode = qrCodeRepository.findByQrCodeValue(qrCodeValue)
             .orElseThrow(() -> new ValidationException("QR code not found"));
         
-        // If usage count is 0, next usage is ENTRY
-        // If usage count is 1, next usage is EXIT
-        return qrCode.getUsageCount() == 0 ? EntryExitType.ENTRY : EntryExitType.EXIT;
+        // Get user's current status to determine next action
+        UserStatusDto currentStatus = getCurrentUserStatus(qrCode.getUserId());
+        
+        // If user is currently inside, next action should be EXIT
+        // If user is currently outside (or no records), next action should be ENTRY
+        return currentStatus.isInside() ? EntryExitType.EXIT : EntryExitType.ENTRY;
+    }
+    
+    @Override
+    public UserStatusDto getCurrentUserStatus(Long userId) {
+        // Get the most recent entry/exit record for the user
+        List<EntryExitRecord> latestRecords = entryExitRecordRepository.findLatestByUserId(userId);
+        
+        if (latestRecords.isEmpty()) {
+            // No records found - user is assumed to be outside
+            return UserStatusDto.noRecords();
+        }
+        
+        EntryExitRecord latestRecord = latestRecords.get(0);
+        
+        if (latestRecord.getType() == EntryExitType.ENTRY) {
+            // Last action was entry - user is inside
+            return UserStatusDto.inside(latestRecord.getTimestamp());
+        } else {
+            // Last action was exit - user is outside
+            return UserStatusDto.outside(latestRecord.getTimestamp());
+        }
+    }
+    
+    @Override
+    @Transactional
+    public void resetUserRecords(Long userId) {
+        // Delete all entry/exit records for the user
+        entryExitRecordRepository.deleteByUserId(userId);
     }
     
     private void validateGpsCoordinates(Double latitude, Double longitude) {

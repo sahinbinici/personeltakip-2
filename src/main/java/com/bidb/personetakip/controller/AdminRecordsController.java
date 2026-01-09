@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -22,7 +23,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/admin/records")
-@PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+@PreAuthorize("hasRole('ADMIN') or hasRole('DEPARTMENT_ADMIN') or hasRole('SUPER_ADMIN')")
 public class AdminRecordsController {
 
     private final AdminRecordsService adminRecordsService;
@@ -36,15 +37,17 @@ public class AdminRecordsController {
      *
      * @param page Page number (default: 0)
      * @param size Page size (default: 20)
+     * @param authentication Authentication object for department filtering
      * @return Page of AdminRecordDto objects
      * Requirements: 3.1, 3.2 - Paginated record listing with user information
      */
     @GetMapping
     public ResponseEntity<Page<AdminRecordDto>> getAllRecords(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
 
-        Page<AdminRecordDto> records = adminRecordsService.getAllRecords(page, size);
+        Page<AdminRecordDto> records = adminRecordsService.getAllRecords(page, size, authentication);
         return ResponseEntity.ok(records);
     }
 
@@ -59,6 +62,7 @@ public class AdminRecordsController {
      * @param ipMismatch IP mismatch filter (optional: "mismatch", "match", "unknown")
      * @param page Page number (default: 0)
      * @param size Page size (default: 20)
+     * @param authentication Authentication object for department filtering
      * @return Page of AdminRecordDto objects matching filters
      * Requirements: 3.3, 3.4, 2.4, 4.4 - Date range, user, department, IP and IP mismatch filtering
      */
@@ -71,22 +75,24 @@ public class AdminRecordsController {
             @RequestParam(required = false) String ipAddress,
             @RequestParam(required = false) String ipMismatch,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
 
         Page<AdminRecordDto> records = adminRecordsService.getRecordsWithFilters(
-                startDate, endDate, userId, departmentCode, ipAddress, ipMismatch, page, size);
+                startDate, endDate, userId, departmentCode, ipAddress, ipMismatch, page, size, authentication);
         return ResponseEntity.ok(records);
     }
 
     /**
      * Get IP address statistics for advanced filtering.
      *
+     * @param authentication Authentication object for department filtering
      * @return IP address statistics and common IPs
      * Requirements: 2.4 - IP address filtering functionality
      */
     @GetMapping("/ip-statistics")
-    public ResponseEntity<Map<String, Object>> getIpStatistics() {
-        Map<String, Object> statistics = adminRecordsService.getIpStatistics();
+    public ResponseEntity<Map<String, Object>> getIpStatistics(Authentication authentication) {
+        Map<String, Object> statistics = adminRecordsService.getIpStatistics(authentication);
         return ResponseEntity.ok(statistics);
     }
 
@@ -98,6 +104,7 @@ public class AdminRecordsController {
      * @param complianceStatus Compliance status filter
      * @param page Page number (default: 0)
      * @param size Page size (default: 20)
+     * @param authentication Authentication object for department filtering
      * @return Page of AdminRecordDto objects matching IP search criteria
      * Requirements: 2.4 - IP address filtering functionality
      */
@@ -107,10 +114,11 @@ public class AdminRecordsController {
             @RequestParam(required = false) String ipType,
             @RequestParam(required = false) String complianceStatus,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
 
         Page<AdminRecordDto> records = adminRecordsService.searchRecordsByIp(
-                ipQuery, ipType, complianceStatus, page, size);
+                ipQuery, ipType, complianceStatus, page, size, authentication);
         return ResponseEntity.ok(records);
     }
 
@@ -121,6 +129,7 @@ public class AdminRecordsController {
      * @param endDate End date (format: yyyy-MM-dd)
      * @param page Page number (default: 0)
      * @param size Page size (default: 20)
+     * @param authentication Authentication object for department filtering
      * @return Page of AdminRecordDto objects within date range
      * Requirements: 3.3 - Date range filtering
      */
@@ -129,10 +138,11 @@ public class AdminRecordsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
 
         Page<AdminRecordDto> records = adminRecordsService.getRecordsByDateRange(
-                startDate, endDate, page, size);
+                startDate, endDate, page, size, authentication);
         return ResponseEntity.ok(records);
     }
 
@@ -142,6 +152,7 @@ public class AdminRecordsController {
      * @param userId User ID
      * @param page Page number (default: 0)
      * @param size Page size (default: 20)
+     * @param authentication Authentication object for department filtering
      * @return Page of AdminRecordDto objects for specified user
      * Requirements: 3.4 - User-specific record filtering
      */
@@ -149,9 +160,10 @@ public class AdminRecordsController {
     public ResponseEntity<Page<AdminRecordDto>> getRecordsByUser(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
 
-        Page<AdminRecordDto> records = adminRecordsService.getRecordsByUser(userId, page, size);
+        Page<AdminRecordDto> records = adminRecordsService.getRecordsByUser(userId, page, size, authentication);
         return ResponseEntity.ok(records);
     }
 
@@ -164,6 +176,7 @@ public class AdminRecordsController {
      * @param departmentCode Department code (optional)
      * @param ipAddress IP address filter (optional)
      * @param ipMismatch IP mismatch filter (optional)
+     * @param authentication Authentication object for department filtering
      * @return CSV file download
      * Requirements: 3.5, 2.5 - CSV export functionality with IP addresses
      */
@@ -174,9 +187,10 @@ public class AdminRecordsController {
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) String departmentCode,
             @RequestParam(required = false) String ipAddress,
-            @RequestParam(required = false) String ipMismatch) {
+            @RequestParam(required = false) String ipMismatch,
+            Authentication authentication) {
 
-        String csvContent = adminRecordsService.generateCsvExport(startDate, endDate, userId, departmentCode, ipAddress, ipMismatch);
+        String csvContent = adminRecordsService.generateCsvExport(startDate, endDate, userId, departmentCode, ipAddress, ipMismatch, authentication);
 
         // Generate filename with current date
         String filename = "giris_cikis_kayitlari_" +
@@ -195,18 +209,20 @@ public class AdminRecordsController {
      * Get daily summary statistics.
      *
      * @param date Date to get statistics for (optional, defaults to today)
+     * @param authentication Authentication object for department filtering
      * @return Daily summary statistics
      * Requirements: 3.6 - Daily summary statistics
      */
     @GetMapping("/stats/daily")
     public ResponseEntity<AdminRecordsService.DailySummaryStats> getDailySummaryStats(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            Authentication authentication) {
 
         if (date == null) {
             date = LocalDate.now();
         }
 
-        AdminRecordsService.DailySummaryStats stats = adminRecordsService.getDailySummaryStats(date);
+        AdminRecordsService.DailySummaryStats stats = adminRecordsService.getDailySummaryStats(date, authentication);
         return ResponseEntity.ok(stats);
     }
 
@@ -215,26 +231,29 @@ public class AdminRecordsController {
      *
      * @param page Page number (default: 0)
      * @param size Page size (default: 20)
+     * @param authentication Authentication object for department filtering
      * @return Page of AdminRecordDto objects with IP mismatches
      * Requirements: 4.4 - IP mismatch filtering
      */
     @GetMapping("/ip-mismatch")
     public ResponseEntity<Page<AdminRecordDto>> getRecordsWithIpMismatch(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
 
-        Page<AdminRecordDto> records = adminRecordsService.getRecordsWithIpMismatch(page, size);
+        Page<AdminRecordDto> records = adminRecordsService.getRecordsWithIpMismatch(page, size, authentication);
         return ResponseEntity.ok(records);
     }
 
     /**
      * Get list of departments for filtering.
      *
+     * @param authentication Authentication object for department filtering
      * @return List of department codes and names
      */
     @GetMapping("/departments")
-    public ResponseEntity<List<Map<String, String>>> getDepartments() {
-        List<Map<String, String>> departments = adminRecordsService.getDepartments();
+    public ResponseEntity<List<Map<String, String>>> getDepartments(Authentication authentication) {
+        List<Map<String, String>> departments = adminRecordsService.getDepartments(authentication);
         return ResponseEntity.ok(departments);
     }
 }

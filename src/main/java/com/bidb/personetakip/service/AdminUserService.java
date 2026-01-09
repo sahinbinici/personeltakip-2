@@ -1,6 +1,7 @@
 package com.bidb.personetakip.service;
 
 import com.bidb.personetakip.dto.AdminUserDto;
+import com.bidb.personetakip.dto.DepartmentDto;
 import com.bidb.personetakip.exception.IpAssignmentException;
 import com.bidb.personetakip.model.AdminAuditLog;
 import com.bidb.personetakip.model.User;
@@ -9,6 +10,7 @@ import com.bidb.personetakip.repository.AdminAuditLogRepository;
 import com.bidb.personetakip.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -45,18 +47,122 @@ public class AdminUserService {
     @Autowired
     private IpPrivacyService ipPrivacyService;
     
+    @Autowired
+    private com.bidb.personetakip.repository.DepartmentPermissionRepository departmentPermissionRepository;
+    
+    /**
+     * Get accessible department codes for the authenticated user.
+     * SUPER_ADMIN and ADMIN can access all departments.
+     * DEPARTMENT_ADMIN can access departments they have permissions for.
+     * 
+     * @param adminUserId ID of the admin making the request
+     * @param adminRole Role of the admin making the request
+     * @return List of accessible department codes (null means all departments)
+     */
+    private List<String> getAccessibleDepartmentCodes(Long adminUserId, String adminRole) {
+        logger.info("getAccessibleDepartmentCodes - adminUserId: {}, adminRole: {}", adminUserId, adminRole);
+        
+        if ("SUPER_ADMIN".equals(adminRole) || "ADMIN".equals(adminRole)) {
+            logger.info("User is SUPER_ADMIN or ADMIN - returning null (all departments)");
+            return null; // Can access all departments
+        }
+        
+        if ("DEPARTMENT_ADMIN".equals(adminRole) && adminUserId != null) {
+            // Get departments this admin has permission for
+            List<String> permittedDepartments = departmentPermissionRepository.findDepartmentCodesByUserId(adminUserId);
+            logger.info("DEPARTMENT_ADMIN - permittedDepartments from DB: {}", permittedDepartments);
+            
+            // If no specific permissions found, fall back to user's own department for backward compatibility
+            if (permittedDepartments.isEmpty()) {
+                Optional<User> adminUser = userRepository.findById(adminUserId);
+                if (adminUser.isPresent()) {
+                    String deptCode = adminUser.get().getDepartmentCode();
+                    logger.info("No permissions found, falling back to user's departmentCode: {}", deptCode);
+                    if (deptCode != null) {
+                        return List.of(deptCode);
+                    }
+                }
+            }
+            
+            return permittedDepartments.isEmpty() ? List.of() : permittedDepartments;
+        }
+        
+        logger.info("No accessible departments - returning empty list");
+        return List.of(); // No accessible departments
+    }
+    
+    /**
+     * Get paginated list of all users with department-based filtering for department admins.
+     * 
+     * @param page Page number (default: 0)
+     * @param size Page size (default: 20)
+     * @param adminUserId ID of the admin making the request
+     * @param adminRole Role of the admin making the request
+     * @param adminDepartmentCode Department code of the admin (for department admins) - deprecated, use permissions instead
+     * @return Page of AdminUserDto objects
+     * Requirements: 2.1, 2.2 - Paginated user listing with department-based access control
+     */
+    public Page<AdminUserDto> getAllUsersWithDepartmentFilter(int page, int size, Long adminUserId, String adminRole, String adminDepartmentCode) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(adminUserId, adminRole);
+        
+        if (accessibleDepartments == null) {
+            // For ADMIN and SUPER_ADMIN, show all users
+            Page<User> users = userRepository.findAll(pageable);
+            return users.map(this::convertToAdminUserDto);
+        } else if (accessibleDepartments.isEmpty()) {
+            // No accessible departments - return empty page
+            return new PageImpl<>(List.of(), pageable, 0);
+        } else {
+            // For DEPARTMENT_ADMIN, show users from accessible departments
+            Page<User> users = userRepository.findByDepartmentCodeIn(accessibleDepartments, pageable);
+            return users.map(this::convertToAdminUserDto);
+        }
+    }
+    
     /**
      * Get paginated list of all users.
      * 
-     * @param page Page number (0-based)
-     * @param size Page size
+     * @param page Page number (default: 0)
+     * @param size Page size (default: 20)
      * @return Page of AdminUserDto objects
-     * Requirements: 2.1 - Paginated user listing
+     * Requirements: 2.1, 2.2 - Paginated user listing
      */
     public Page<AdminUserDto> getAllUsers(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<User> users = userRepository.findAll(pageable);
         return users.map(this::convertToAdminUserDto);
+    }
+    
+    /**
+     * Search users with department-based filtering for department admins.
+     * 
+     * @param searchTerm Search term
+     * @param page Page number
+     * @param size Page size
+     * @param adminUserId ID of the admin making the request
+     * @param adminRole Role of the admin making the request
+     * @param adminDepartmentCode Department code of the admin (deprecated, use permissions instead)
+     * @return Page of matching AdminUserDto objects
+     */
+    public Page<AdminUserDto> searchUsersWithDepartmentFilter(String searchTerm, int page, int size, Long adminUserId, String adminRole, String adminDepartmentCode) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(adminUserId, adminRole);
+        
+        if (accessibleDepartments == null) {
+            // For ADMIN and SUPER_ADMIN, search all users
+            Page<User> users = userRepository.findBySearchTerm(searchTerm, pageable);
+            return users.map(this::convertToAdminUserDto);
+        } else if (accessibleDepartments.isEmpty()) {
+            // No accessible departments - return empty page
+            return new PageImpl<>(List.of(), pageable, 0);
+        } else {
+            // For department admins, search only within accessible departments
+            Page<User> users = userRepository.findBySearchTermAndDepartmentCodeIn(searchTerm, accessibleDepartments, pageable);
+            return users.map(this::convertToAdminUserDto);
+        }
     }
     
     /**
@@ -177,16 +283,96 @@ public class AdminUserService {
      */
     public UserRoleStats getUserRoleStats() {
         long normalUsers = userRepository.countByRole(UserRole.NORMAL_USER);
+        long departmentAdminUsers = userRepository.countByRole(UserRole.DEPARTMENT_ADMIN);
         long adminUsers = userRepository.countByRole(UserRole.ADMIN);
         long superAdminUsers = userRepository.countByRole(UserRole.SUPER_ADMIN);
         long totalUsers = userRepository.count();
         
         return UserRoleStats.builder()
                 .normalUsers(normalUsers)
+                .departmentAdminUsers(departmentAdminUsers)
                 .adminUsers(adminUsers)
                 .superAdminUsers(superAdminUsers)
                 .totalUsers(totalUsers)
                 .build();
+    }
+    
+    /**
+     * Get list of all departments from users.
+     * 
+     * @return List of department codes and names
+     */
+    public List<DepartmentDto> getAllDepartments() {
+        List<Object[]> departments = userRepository.findDistinctDepartments();
+        return departments.stream()
+                .map(dept -> DepartmentDto.builder()
+                        .code((String) dept[0])
+                        .name((String) dept[1])
+                        .userCount(((Number) dept[2]).longValue())
+                        .build())
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Get list of departments with filtering for department admins.
+     * 
+     * @param adminUserId ID of the admin making the request
+     * @param adminRole Role of the admin making the request
+     * @param adminDepartmentCode Department code of the admin (deprecated, use permissions instead)
+     * @return List of department codes and names
+     */
+    public List<DepartmentDto> getAllDepartmentsWithFilter(Long adminUserId, String adminRole, String adminDepartmentCode) {
+        List<Object[]> departments = userRepository.findDistinctDepartments();
+        List<String> accessibleDepartments = getAccessibleDepartmentCodes(adminUserId, adminRole);
+        
+        return departments.stream()
+                .filter(dept -> {
+                    if (accessibleDepartments == null) {
+                        return true; // ADMIN and SUPER_ADMIN can see all departments
+                    } else if (accessibleDepartments.isEmpty()) {
+                        return false; // No accessible departments
+                    } else {
+                        return accessibleDepartments.contains((String) dept[0]);
+                    }
+                })
+                .map(dept -> DepartmentDto.builder()
+                        .code((String) dept[0])
+                        .name((String) dept[1])
+                        .userCount(((Number) dept[2]).longValue())
+                        .build())
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Get users by attendance status.
+     * 
+     * @param attendanceStatus "NO_RECORDS", "INSIDE", "OUTSIDE"
+     * @param page Page number
+     * @param size Page size
+     * @return Page of users matching attendance status
+     */
+    public Page<AdminUserDto> getUsersByAttendanceStatus(String attendanceStatus, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        
+        switch (attendanceStatus.toUpperCase()) {
+            case "NO_RECORDS":
+                // Users who have never made any entry/exit records
+                Page<User> usersWithNoRecords = userRepository.findUsersWithNoEntryExitRecords(pageable);
+                return usersWithNoRecords.map(this::convertToAdminUserDto);
+                
+            case "INSIDE":
+                // Users who are currently inside (last record is ENTRY)
+                Page<User> usersInside = userRepository.findUsersCurrentlyInside(pageable);
+                return usersInside.map(this::convertToAdminUserDto);
+                
+            case "OUTSIDE":
+                // Users who are currently outside (last record is EXIT or no records)
+                Page<User> usersOutside = userRepository.findUsersCurrentlyOutside(pageable);
+                return usersOutside.map(this::convertToAdminUserDto);
+                
+            default:
+                return getAllUsers(page, size);
+        }
     }
     
     /**
@@ -310,6 +496,7 @@ public class AdminUserService {
     @lombok.AllArgsConstructor
     public static class UserRoleStats {
         private long normalUsers;
+        private long departmentAdminUsers;
         private long adminUsers;
         private long superAdminUsers;
         private long totalUsers;

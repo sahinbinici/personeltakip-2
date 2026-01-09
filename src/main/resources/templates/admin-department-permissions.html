@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="tr" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Departman Yetkileri - Gaziantep Üniversitesi Personel Takip Sistemi</title>
+    <link rel="stylesheet" href="/css/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .permission-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .permission-card-header {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+            border-radius: 8px 8px 0 0;
+        }
+        .permission-card-body {
+            padding: 1rem;
+        }
+        .department-badge {
+            display: inline-block;
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin: 0.25rem;
+        }
+        .no-permissions {
+            color: #999;
+            font-style: italic;
+        }
+        .department-checkbox {
+            padding: 0.5rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .department-checkbox:last-child {
+            border-bottom: none;
+        }
+        .department-checkbox label {
+            margin-left: 0.5rem;
+            cursor: pointer;
+        }
+        .department-checkbox input[type="checkbox"] {
+            cursor: pointer;
+        }
+        .department-select-container {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Navigation Sidebar -->
+        <nav class="admin-sidebar">
+            <div class="sidebar-header">
+                <img src="/images/gaziantep-university-logo.svg" alt="Gaziantep Üniversitesi" class="sidebar-logo">
+                <h2>Gaziantep Üniversitesi</h2>
+                <p class="sidebar-subtitle">Personel Takip Sistemi</p>
+            </div>
+            <ul class="sidebar-menu">
+                <li>
+                    <a href="/admin/dashboard">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/users">
+                        <i class="fas fa-users"></i>
+                        <span>Kullanıcı Yönetimi</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/records">
+                        <i class="fas fa-clipboard-list"></i>
+                        <span>Giriş/Çıkış Kayıtları</span>
+                    </a>
+                </li>
+                <li id="departmentPermissionsLink" class="active" style="display: block;">
+                    <a href="/admin/department-permissions">
+                        <i class="fas fa-sitemap"></i>
+                        <span>Departman Yetkileri</span>
+                    </a>
+                </li>
+                <li class="sidebar-divider"></li>
+                <li>
+                    <a href="/qrcode" class="sidebar-link-secondary">
+                        <i class="fas fa-qrcode"></i>
+                        <span>QR Kod Sayfası</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" onclick="logout()" class="sidebar-link-danger">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Çıkış Yap</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <!-- Header -->
+            <header class="admin-header">
+                <div class="header-left">
+                    <h1>Departman Yetkileri</h1>
+                    <p class="header-subtitle">Departman adminlerinin yönetebileceği departmanları belirleyin</p>
+                </div>
+                <div class="header-right">
+                    <div class="user-info">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="adminUserName">Admin</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Refresh Button -->
+            <section class="search-section">
+                <div class="search-container">
+                    <button id="refreshBtn" class="refresh-btn" onclick="refreshData()">
+                        <i class="fas fa-sync-alt" id="refreshIcon"></i>
+                        Yenile
+                    </button>
+                </div>
+            </section>
+
+            <!-- Department Admins Section -->
+            <section class="table-section">
+                <div class="table-header">
+                    <h2><i class="fas fa-user-shield"></i> Departman Adminleri</h2>
+                </div>
+                
+                <div id="loadingIndicator" class="loading-row" style="display: none;">
+                    <div class="loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Veriler yükleniyor...
+                    </div>
+                </div>
+                
+                <div id="departmentAdminsList">
+                    <!-- Department admins will be loaded here -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Edit Permissions Modal -->
+    <div id="editPermissionsModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit"></i> Departman Yetkilerini Düzenle</h3>
+                <button class="modal-close" onclick="closeEditModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="user-info-row" style="margin-bottom: 1rem;">
+                    <strong>Kullanıcı:</strong> <span id="editUserName">--</span>
+                </div>
+                <div class="user-info-row" style="margin-bottom: 1rem;">
+                    <span id="editUserInfo" class="text-muted">--</span>
+                </div>
+                
+                <div style="margin-bottom: 0.5rem;">
+                    <strong>Yönetebileceği Departmanlar:</strong>
+                </div>
+                <div id="departmentCheckboxes" class="department-select-container">
+                    <!-- Department checkboxes will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditModal()">İptal</button>
+                <button class="btn btn-primary" onclick="savePermissions()">
+                    <i class="fas fa-save"></i> Kaydet
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>İşlem yapılıyor...</p>
+        </div>
+    </div>
+
+    <!-- Error Alert -->
+    <div id="errorAlert" class="alert alert-error" style="display: none;">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span id="errorMessage"></span>
+        <button onclick="hideError()" class="alert-close">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <!-- Success Alert -->
+    <div id="successAlert" class="alert alert-success" style="display: none;">
+        <i class="fas fa-check-circle"></i>
+        <span id="successMessage"></span>
+        <button onclick="hideSuccess()" class="alert-close">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <script src="/js/admin.js?v=20260109b"></script>
+    <script src="/js/admin-department-permissions.js?v=20260109b"></script>
+</body>
+</html>

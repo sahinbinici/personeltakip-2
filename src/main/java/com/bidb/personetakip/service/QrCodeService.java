@@ -23,4 +23,9 @@ public interface QrCodeService {
      * Generates QR code image
      */
     byte[] generateQrCodeImage(String qrCodeValue);
+    
+    /**
+     * Resets QR code usage count for development (development mode only)
+     */
+    void resetUsageCount(Long userId);
 }

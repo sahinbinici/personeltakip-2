@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Browser Storage</title>
+</head>
+<body>
+    <h1>Clear Browser Storage</h1>
+    <button onclick="clearStorage()">Clear All Storage</button>
+    <div id="output"></div>
+
+    <script>
+        function clearStorage() {
+            // Clear localStorage
+            localStorage.clear();
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            
+            // Clear cookies
+            document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+            
+            document.getElementById('output').innerHTML = '<p style="color: green;">All storage cleared! You can now test login.</p>';
+            
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

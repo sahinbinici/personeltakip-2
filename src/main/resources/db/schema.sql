@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS qr_codes (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_user_date (user_id, valid_date),
     INDEX idx_qr_value (qr_code_value),
-    CONSTRAINT chk_usage_count CHECK (usage_count >= 0 AND usage_count <= 2)
+    CONSTRAINT chk_usage_count CHECK (usage_count >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Entry/Exit Records table

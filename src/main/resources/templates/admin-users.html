@@ -35,6 +35,12 @@
                         <span>Giriş/Çıkış Kayıtları</span>
                     </a>
                 </li>
+                <li id="departmentPermissionsLink" style="display: none;">
+                    <a href="/admin/department-permissions">
+                        <i class="fas fa-sitemap"></i>
+                        <span>Departman Yetkileri</span>
+                    </a>
+                </li>
                 <li class="sidebar-divider"></li>
                 <li>
                     <a href="/qrcode" class="sidebar-link-secondary">
@@ -82,6 +88,7 @@
                         <select id="roleFilter">
                             <option value="">Tüm Roller</option>
                             <option value="NORMAL_USER">Normal Kullanıcı</option>
+                            <option value="DEPARTMENT_ADMIN">Departman Yöneticisi</option>
                             <option value="ADMIN">Yönetici</option>
                             <option value="SUPER_ADMIN">Süper Yönetici</option>
                         </select>
@@ -91,6 +98,15 @@
                         <select id="departmentFilter">
                             <option value="">Tüm Departmanlar</option>
                             <!-- Departments will be loaded dynamically -->
+                        </select>
+                    </div>
+                    
+                    <div class="filter-box">
+                        <select id="attendanceFilter">
+                            <option value="">Tüm Kullanıcılar</option>
+                            <option value="NO_RECORDS">Giriş/Çıkış Yapmamış</option>
+                            <option value="INSIDE">İçeride Olanlar</option>
+                            <option value="OUTSIDE">Dışarıda Olanlar</option>
                         </select>
                     </div>
                     
@@ -121,6 +137,16 @@
                         <div class="stat-content">
                             <h3 id="normalUsersCount">--</h3>
                             <p>Normal Kullanıcı</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon department-admin">
+                            <i class="fas fa-user-tie"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="departmentAdminUsersCount">--</h3>
+                            <p>Departman Yöneticisi</p>
                         </div>
                     </div>
                     
@@ -241,6 +267,7 @@
                         <strong>Yeni Rol:</strong>
                         <select id="newRoleSelect">
                             <option value="NORMAL_USER">Normal Kullanıcı</option>
+                            <option value="DEPARTMENT_ADMIN">Departman Yöneticisi</option>
                             <option value="ADMIN">Yönetici</option>
                             <option value="SUPER_ADMIN">Süper Yönetici</option>
                         </select>
@@ -335,7 +362,7 @@
         </button>
     </div>
 
-    <script src="/js/admin.js"></script>
-    <script src="/js/admin-users.js"></script>
+    <script src="/js/admin.js?v=20260109"></script>
+    <script src="/js/admin-users.js?v=20260109"></script>
 </body>
 </html>

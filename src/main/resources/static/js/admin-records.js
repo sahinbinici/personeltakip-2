@@ -13,9 +13,11 @@ let currentFilters = {
 let totalPages = 0;
 let allUsers = [];
 let allDepartments = [];
+let currentUserRole = null; // Store current user's role
 
 // Initialize records page
 document.addEventListener('DOMContentLoaded', function() {
+    loadCurrentUserRole();
     loadDailyStats();
     loadUsers();
     loadDepartments();
@@ -23,6 +25,25 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     setDefaultDates();
 });
+
+// Load current user's role from JWT token
+function loadCurrentUserRole() {
+    try {
+        const token = localStorage.getItem('token');
+        if (token) {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            currentUserRole = payload.role;
+        }
+    } catch (error) {
+        console.error('Error parsing JWT token:', error);
+        currentUserRole = null;
+    }
+}
+
+// Check if current user can see all departments
+function canSeeAllDepartments() {
+    return currentUserRole === 'ADMIN' || currentUserRole === 'SUPER_ADMIN';
+}
 
 // Setup event listeners
 function setupEventListeners() {
@@ -184,13 +205,30 @@ function populateDepartmentSelect() {
         departmentSelect.removeChild(departmentSelect.lastChild);
     }
     
-    // Add department options
-    allDepartments.forEach(department => {
-        const option = document.createElement('option');
-        option.value = department.code;
-        option.textContent = department.name;
-        departmentSelect.appendChild(option);
-    });
+    // Update the first option text based on available departments
+    const firstOption = departmentSelect.firstElementChild;
+    if (canSeeAllDepartments()) {
+        firstOption.textContent = 'Tüm Departmanlar';
+    } else {
+        // For department admin
+        if (allDepartments.length === 1) {
+            firstOption.textContent = allDepartments[0].name;
+        } else if (allDepartments.length > 1) {
+            firstOption.textContent = 'Tüm Departmanlar';
+        } else {
+            firstOption.textContent = 'Departman Yok';
+        }
+    }
+    
+    // Add department options - only if there are multiple departments
+    if (allDepartments.length > 1 || canSeeAllDepartments()) {
+        allDepartments.forEach(department => {
+            const option = document.createElement('option');
+            option.value = department.code;
+            option.textContent = department.name;
+            departmentSelect.appendChild(option);
+        });
+    }
 }
 
 // Load records with current filters

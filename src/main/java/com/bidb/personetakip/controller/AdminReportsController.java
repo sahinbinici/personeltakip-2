@@ -18,7 +18,7 @@ import java.time.LocalDate;
  */
 @RestController
 @RequestMapping("/api/admin/reports")
-@PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+@PreAuthorize("hasRole('ADMIN') or hasRole('DEPARTMENT_ADMIN') or hasRole('SUPER_ADMIN')")
 public class AdminReportsController {
     
     @Autowired

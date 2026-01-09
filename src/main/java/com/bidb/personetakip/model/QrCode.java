@@ -60,12 +60,12 @@ public class QrCode {
     private LocalDate validDate;
     
     /**
-     * Number of times this QR code has been used (0, 1, or 2)
+     * Number of times this QR code has been used (0, 1, or 2 in normal mode, unlimited in dev mode)
      * 0 = unused, 1 = used for entry, 2 = used for entry and exit
      */
     @Column(name = "usage_count", nullable = false)
     @Min(value = 0, message = "Usage count cannot be negative")
-    @Max(value = 2, message = "Usage count cannot exceed 2")
+    // Note: Max validation removed to allow development mode with unlimited usage
     @Builder.Default
     private Integer usageCount = 0;
     
@@ -98,28 +98,55 @@ public class QrCode {
     
     /**
      * Check if the QR code has reached its usage limit
+     * @param maxUsage Maximum allowed usage count (configurable)
      * @return true if usage count is less than maximum
      */
+    public boolean canBeUsed(int maxUsage) {
+        return usageCount < maxUsage;
+    }
+    
+    /**
+     * Check if the QR code has reached its usage limit (legacy method for backward compatibility)
+     * @return true if usage count is less than default maximum (2)
+     */
     public boolean canBeUsed() {
-        return usageCount < MAX_USAGE;
+        return canBeUsed(MAX_USAGE);
     }
     
     /**
      * Check if the QR code is valid and can be used
+     * @param maxUsage Maximum allowed usage count (configurable)
+     * @return true if valid for today and not at usage limit
+     */
+    public boolean isValid(int maxUsage) {
+        return isValidForToday() && canBeUsed(maxUsage);
+    }
+    
+    /**
+     * Check if the QR code is valid and can be used (legacy method for backward compatibility)
      * @return true if valid for today and not at usage limit
      */
     public boolean isValid() {
-        return isValidForToday() && canBeUsed();
+        return isValid(MAX_USAGE);
     }
     
     /**
      * Increment the usage count by 1
+     * @param maxUsage Maximum allowed usage count (configurable)
+     * @throws IllegalStateException if already at maximum usage
+     */
+    public void incrementUsage(int maxUsage) {
+        if (usageCount >= maxUsage) {
+            throw new IllegalStateException("QR code has already been used maximum times (" + maxUsage + ")");
+        }
+        usageCount++;
+    }
+    
+    /**
+     * Increment the usage count by 1 (legacy method for backward compatibility)
      * @throws IllegalStateException if already at maximum usage
      */
     public void incrementUsage() {
-        if (usageCount >= MAX_USAGE) {
-            throw new IllegalStateException("QR code has already been used maximum times");
-        }
-        usageCount++;
+        incrementUsage(MAX_USAGE);
     }
 }

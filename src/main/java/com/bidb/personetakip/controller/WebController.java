@@ -83,6 +83,16 @@ public class WebController {
     }
     
     /**
+     * Test page for debugging redirect logic.
+     * 
+     * @return redirect test page
+     */
+    @GetMapping("/test-redirect")
+    public String testRedirect() {
+        return "redirect:/test-browser-redirect.html";
+    }
+    
+    /**
      * Extracts JWT token from the request.
      * Checks Authorization header first, then falls back to cookies.
      * 

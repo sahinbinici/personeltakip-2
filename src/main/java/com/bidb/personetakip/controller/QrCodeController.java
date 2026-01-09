@@ -159,6 +159,26 @@ public class QrCodeController {
     }
     
     /**
+     * Development endpoint to check QR code service configuration.
+     * GET /api/qrcode/dev-config
+     */
+    @GetMapping("/dev-config")
+    public ResponseEntity<java.util.Map<String, Object>> getQrDevConfig() {
+        java.util.Map<String, Object> config = new java.util.HashMap<>();
+        
+        // Get a sample QR code to check current settings
+        Long userId = getAuthenticatedUserId();
+        QrCodeDto qrCode = qrCodeService.getDailyQrCode(userId);
+        
+        config.put("maxUsagePerDay", qrCode.maxUsage());
+        config.put("currentUsage", qrCode.usageCount());
+        config.put("qrCodeValue", qrCode.qrCodeValue());
+        config.put("validDate", qrCode.validDate());
+        
+        return ResponseEntity.ok(config);
+    }
+    
+    /**
      * Extracts authenticated user ID from security context.
      * 
      * @return User ID from JWT token

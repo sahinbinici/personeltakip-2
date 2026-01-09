@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Browser Redirect</title>
+</head>
+<body>
+    <h1>Test Browser Redirect for Department Admin</h1>
+    <button onclick="testRedirect()">Test Redirect Logic</button>
+    <div id="output"></div>
+
+    <script>
+        function testRedirect() {
+            // Simulate department admin user data
+            const userData = {
+                role: 'DEPARTMENT_ADMIN',
+                firstName: 'Departman',
+                lastName: 'Yöneticisi'
+            };
+            
+            console.log('Testing redirect logic...');
+            console.log('User role:', userData.role);
+            
+            const output = document.getElementById('output');
+            output.innerHTML = '<p>User role: ' + userData.role + '</p>';
+            
+            // Test the same logic as in login.js
+            if (userData.role === 'ADMIN' || userData.role === 'DEPARTMENT_ADMIN' || userData.role === 'SUPER_ADMIN') {
+                console.log('Should redirect to /admin/dashboard');
+                output.innerHTML += '<p style="color: green;">Should redirect to: /admin/dashboard</p>';
+                output.innerHTML += '<p><a href="/admin/dashboard">Click here to test admin dashboard</a></p>';
+            } else {
+                console.log('Should redirect to /qrcode');
+                output.innerHTML += '<p style="color: blue;">Should redirect to: /qrcode</p>';
+                output.innerHTML += '<p><a href="/qrcode">Click here to test qrcode</a></p>';
+            }
+        }
+    </script>
+</body>
+</html>

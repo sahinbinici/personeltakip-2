@@ -109,5 +109,88 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     @Query("SELECT COUNT(u) FROM User u WHERE u.assignedIpAddresses IS NOT NULL AND u.assignedIpAddresses != ''")
     long countUsersWithAssignedIpAddresses();
+    
+    /**
+     * Search users by TC number, name, or personnel number within a specific department
+     * @param searchTerm Search term
+     * @param departmentCode Department code to filter by
+     * @param pageable Pagination information
+     * @return Page of matching users in the specified department
+     */
+    @Query("SELECT u FROM User u WHERE " +
+           "u.departmentCode = :departmentCode AND (" +
+           "u.tcNo LIKE %:searchTerm% OR " +
+           "u.personnelNo LIKE %:searchTerm% OR " +
+           "LOWER(u.firstName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+           "LOWER(u.lastName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+           "LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+    Page<User> findBySearchTermAndDepartmentCode(@Param("searchTerm") String searchTerm, @Param("departmentCode") String departmentCode, Pageable pageable);
+    @Query("SELECT u.departmentCode, u.departmentName, COUNT(u) FROM User u " +
+           "WHERE u.departmentCode IS NOT NULL AND u.departmentCode != '' " +
+           "GROUP BY u.departmentCode, u.departmentName " +
+           "ORDER BY u.departmentName")
+    List<Object[]> findDistinctDepartments();
+    
+    /**
+     * Find users who have never made any entry/exit records
+     * @param pageable Pagination information
+     * @return Page of users with no entry/exit records
+     */
+    @Query("SELECT u FROM User u WHERE u.id NOT IN " +
+           "(SELECT DISTINCT e.userId FROM EntryExitRecord e)")
+    Page<User> findUsersWithNoEntryExitRecords(Pageable pageable);
+    
+    /**
+     * Find users who are currently inside (last record is ENTRY)
+     * @param pageable Pagination information
+     * @return Page of users currently inside
+     */
+    @Query("SELECT u FROM User u WHERE u.id IN " +
+           "(SELECT e1.userId FROM EntryExitRecord e1 " +
+           "WHERE e1.timestamp = (SELECT MAX(e2.timestamp) FROM EntryExitRecord e2 WHERE e2.userId = e1.userId) " +
+           "AND e1.type = 'ENTRY')")
+    Page<User> findUsersCurrentlyInside(Pageable pageable);
+    
+    /**
+     * Find users who are currently outside (last record is EXIT or no records)
+     * @param pageable Pagination information
+     * @return Page of users currently outside
+     */
+    @Query("SELECT u FROM User u WHERE u.id NOT IN " +
+           "(SELECT e1.userId FROM EntryExitRecord e1 " +
+           "WHERE e1.timestamp = (SELECT MAX(e2.timestamp) FROM EntryExitRecord e2 WHERE e2.userId = e1.userId) " +
+           "AND e1.type = 'ENTRY')")
+    Page<User> findUsersCurrentlyOutside(Pageable pageable);
+
+    /**
+     * Count users by department codes
+     * @param departmentCodes List of department codes
+     * @return Number of users in the specified departments
+     */
+    long countByDepartmentCodeIn(List<String> departmentCodes);
+
+    /**
+     * Find users by multiple department codes with pagination
+     * @param departmentCodes List of department codes
+     * @param pageable Pagination information
+     * @return Page of users with the specified department codes
+     */
+    Page<User> findByDepartmentCodeIn(List<String> departmentCodes, Pageable pageable);
+    
+    /**
+     * Search users by TC number, name, or personnel number within multiple departments
+     * @param searchTerm Search term
+     * @param departmentCodes List of department codes to filter by
+     * @param pageable Pagination information
+     * @return Page of matching users in the specified departments
+     */
+    @Query("SELECT u FROM User u WHERE " +
+           "u.departmentCode IN :departmentCodes AND (" +
+           "u.tcNo LIKE %:searchTerm% OR " +
+           "u.personnelNo LIKE %:searchTerm% OR " +
+           "LOWER(u.firstName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+           "LOWER(u.lastName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+           "LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+    Page<User> findBySearchTermAndDepartmentCodeIn(@Param("searchTerm") String searchTerm, @Param("departmentCodes") List<String> departmentCodes, Pageable pageable);
 
 }

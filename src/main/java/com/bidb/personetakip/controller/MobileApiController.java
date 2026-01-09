@@ -8,6 +8,12 @@ import com.bidb.personetakip.dto.ExcuseResponseDto;
 import com.bidb.personetakip.dto.ExcuseTypeDto;
 import com.bidb.personetakip.dto.LoginRequest;
 import com.bidb.personetakip.dto.QrCodeValidationDto;
+import com.bidb.personetakip.dto.UserStatusDto;
+import com.bidb.personetakip.model.EntryExitRecord;
+import com.bidb.personetakip.model.User;
+import com.bidb.personetakip.model.UserRole;
+import com.bidb.personetakip.repository.EntryExitRecordRepository;
+import com.bidb.personetakip.repository.UserRepository;
 import com.bidb.personetakip.service.AuthenticationService;
 import com.bidb.personetakip.service.EntryExitService;
 import com.bidb.personetakip.service.ExcuseService;
@@ -23,11 +29,16 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -45,21 +56,33 @@ public class MobileApiController {
     private final EntryExitService entryExitService;
     private final QrCodeService qrCodeService;
     private final ExcuseService excuseService;
+    private final EntryExitRecordRepository entryExitRecordRepository;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
     
     // Simple in-memory rate limiting (20 requests per minute per user)
     private final Map<Long, RateLimitInfo> rateLimitMap = new ConcurrentHashMap<>();
     private static final int MAX_REQUESTS_PER_MINUTE = 20;
     private static final long RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
     
+    @Value("${qr.code.development-mode:false}")
+    private boolean developmentMode;
+    
     public MobileApiController(
             AuthenticationService authenticationService,
             EntryExitService entryExitService,
             QrCodeService qrCodeService,
-            ExcuseService excuseService) {
+            ExcuseService excuseService,
+            EntryExitRecordRepository entryExitRecordRepository,
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder) {
         this.authenticationService = authenticationService;
         this.entryExitService = entryExitService;
         this.qrCodeService = qrCodeService;
         this.excuseService = excuseService;
+        this.entryExitRecordRepository = entryExitRecordRepository;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
     
     /**
@@ -480,6 +503,346 @@ public class MobileApiController {
     }
     
     /**
+     * Gets current user status (inside/outside).
+     * GET /api/mobil/durum
+     * 
+     * @return Current user status information
+     */
+    @Operation(
+        summary = "Get current user status",
+        description = "Retrieves the current entry/exit status for the authenticated user",
+        security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "User status retrieved successfully",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = UserStatusDto.class),
+                examples = {
+                    @ExampleObject(
+                        name = "User Inside",
+                        value = """
+                        {
+                            "isInside": true,
+                            "lastActionType": "ENTRY",
+                            "lastActionTime": "2024-12-16T08:30:00",
+                            "message": "İçerisiniz"
+                        }
+                        """
+                    ),
+                    @ExampleObject(
+                        name = "User Outside",
+                        value = """
+                        {
+                            "isInside": false,
+                            "lastActionType": "EXIT",
+                            "lastActionTime": "2024-12-16T17:30:00",
+                            "message": "Dışarıdasınız"
+                        }
+                        """
+                    ),
+                    @ExampleObject(
+                        name = "No Records",
+                        value = """
+                        {
+                            "isInside": false,
+                            "lastActionType": null,
+                            "lastActionTime": null,
+                            "message": "Henüz giriş/çıkış kaydı yok"
+                        }
+                        """
+                    )
+                }
+            )
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "Unauthorized",
+                    value = """
+                    {
+                        "error": "Unauthorized",
+                        "message": "Authentication required"
+                    }
+                    """
+                )
+            )
+        )
+    })
+    @GetMapping("/durum")
+    public ResponseEntity<UserStatusDto> getCurrentUserStatus() {
+        Long userId = getAuthenticatedUserId();
+        UserStatusDto status = entryExitService.getCurrentUserStatus(userId);
+        return ResponseEntity.ok(status);
+    }
+    
+    /**
+     * Development endpoint to reset QR code usage count.
+     * POST /api/mobil/dev-reset-qr
+     */
+    @PostMapping("/dev-reset-qr")
+    public ResponseEntity<Map<String, Object>> resetQrUsage() {
+        if (!developmentMode) {
+            return ResponseEntity.status(403).body(Map.of("error", "Only available in development mode"));
+        }
+        
+        Long userId = getAuthenticatedUserId();
+        
+        // Reset QR code usage through service
+        try {
+            qrCodeService.resetUsageCount(userId);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", "QR code usage count reset successfully for user " + userId);
+            result.put("developmentMode", developmentMode);
+            result.put("userId", userId);
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    /**
+     * Development endpoint to reset all entry/exit records for a user.
+     * POST /api/mobil/dev-reset-records
+     */
+    @PostMapping("/dev-reset-records")
+    public ResponseEntity<Map<String, Object>> resetEntryExitRecords() {
+        if (!developmentMode) {
+            return ResponseEntity.status(403).body(Map.of("error", "Only available in development mode"));
+        }
+        
+        Long userId = getAuthenticatedUserId();
+        
+        try {
+            // Delete all entry/exit records for the user
+            entryExitService.resetUserRecords(userId);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", "All entry/exit records reset successfully for user " + userId);
+            result.put("developmentMode", developmentMode);
+            result.put("userId", userId);
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    /**
+     * Development endpoint to reset both QR usage and entry/exit records.
+     * POST /api/mobil/dev-reset-all
+     */
+    @PostMapping("/dev-reset-all")
+    public ResponseEntity<Map<String, Object>> resetAll() {
+        if (!developmentMode) {
+            return ResponseEntity.status(403).body(Map.of("error", "Only available in development mode"));
+        }
+        
+        Long userId = getAuthenticatedUserId();
+        
+        try {
+            // Reset QR code usage
+            qrCodeService.resetUsageCount(userId);
+            
+            // Reset all entry/exit records
+            entryExitService.resetUserRecords(userId);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", "QR usage and entry/exit records reset successfully for user " + userId);
+            result.put("developmentMode", developmentMode);
+            result.put("userId", userId);
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    /**
+     * Development endpoint to debug user records.
+     * GET /api/mobil/dev-debug-records
+     */
+    @GetMapping("/dev-debug-records")
+    public ResponseEntity<Map<String, Object>> debugUserRecords() {
+        if (!developmentMode) {
+            return ResponseEntity.status(403).body(Map.of("error", "Only available in development mode"));
+        }
+        
+        Long userId = getAuthenticatedUserId();
+        
+        try {
+            // Get user status
+            UserStatusDto status = entryExitService.getCurrentUserStatus(userId);
+            
+            // Get recent records
+            List<EntryExitRecord> recentRecords = entryExitRecordRepository.findLatestByUserId(userId);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("userId", userId);
+            result.put("currentStatus", status);
+            result.put("recentRecordsCount", recentRecords.size());
+            
+            if (!recentRecords.isEmpty()) {
+                EntryExitRecord latest = recentRecords.get(0);
+                result.put("latestRecord", Map.of(
+                    "id", latest.getId(),
+                    "type", latest.getType(),
+                    "timestamp", latest.getTimestamp(),
+                    "qrCodeValue", latest.getQrCodeValue()
+                ));
+            }
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    /**
+     * Development endpoint to create a test user.
+     * POST /api/mobil/dev-create-test-user
+     */
+    @PostMapping("/dev-create-test-user")
+    public ResponseEntity<Map<String, Object>> createTestUser() {
+        if (!developmentMode) {
+            return ResponseEntity.status(403).body(Map.of("error", "Only available in development mode"));
+        }
+        
+        try {
+            // Check if test user already exists
+            String testTcNo = "12345678901";
+            if (userRepository.existsByTcNo(testTcNo)) {
+                return ResponseEntity.ok(Map.of(
+                    "message", "Test user already exists",
+                    "tcNo", testTcNo,
+                    "password", "test123",
+                    "role", "NORMAL_USER"
+                ));
+            }
+            
+            // Create test user
+            User testUser = User.builder()
+                .tcNo(testTcNo)
+                .personnelNo("TEST001")
+                .firstName("Test")
+                .lastName("Kullanıcı")
+                .mobilePhone("05551234567")
+                .departmentCode("BIL")
+                .departmentName("Bilgisayar Mühendisliği")
+                .titleCode("ARS")
+                .passwordHash(passwordEncoder.encode("test123"))
+                .role(UserRole.NORMAL_USER)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+            
+            User savedUser = userRepository.save(testUser);
+            
+            // Create QR code for the test user
+            try {
+                qrCodeService.getDailyQrCode(savedUser.getId());
+            } catch (Exception e) {
+                // QR code creation failed, but user is created
+                System.out.println("Warning: Could not create QR code for test user: " + e.getMessage());
+            }
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", "Test user created successfully");
+            result.put("userId", savedUser.getId());
+            result.put("tcNo", testTcNo);
+            result.put("password", "test123");
+            result.put("role", "NORMAL_USER");
+            result.put("personnelNo", "TEST001");
+            result.put("name", "Test Kullanıcı");
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    /**
+     * Development endpoint to create a test department admin user.
+     * POST /api/mobil/dev-create-department-admin
+     */
+    @PostMapping("/dev-create-department-admin")
+    public ResponseEntity<Map<String, Object>> createDepartmentAdminUser() {
+        if (!developmentMode) {
+            return ResponseEntity.status(403).body(Map.of("error", "Only available in development mode"));
+        }
+        
+        try {
+            // Check if department admin already exists
+            String adminTcNo = "11111111111";
+            if (userRepository.existsByTcNo(adminTcNo)) {
+                return ResponseEntity.ok(Map.of(
+                    "message", "Department admin user already exists",
+                    "tcNo", adminTcNo,
+                    "password", "admin123",
+                    "role", "DEPARTMENT_ADMIN",
+                    "department", "Bilgisayar Mühendisliği"
+                ));
+            }
+            
+            // Create department admin user for BIL department (same as test user)
+            User departmentAdmin = User.builder()
+                .tcNo(adminTcNo)
+                .personnelNo("ADMIN001")
+                .firstName("Departman")
+                .lastName("Yöneticisi")
+                .mobilePhone("05559876543")
+                .departmentCode("BIL")
+                .departmentName("Bilgisayar Mühendisliği")
+                .titleCode("DOC")
+                .passwordHash(passwordEncoder.encode("admin123"))
+                .role(UserRole.DEPARTMENT_ADMIN)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+            
+            User savedAdmin = userRepository.save(departmentAdmin);
+            
+            // Create QR code for the department admin
+            try {
+                qrCodeService.getDailyQrCode(savedAdmin.getId());
+            } catch (Exception e) {
+                // QR code creation failed, but user is created
+                System.out.println("Warning: Could not create QR code for department admin: " + e.getMessage());
+            }
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", "Department admin user created successfully");
+            result.put("userId", savedAdmin.getId());
+            result.put("tcNo", adminTcNo);
+            result.put("password", "admin123");
+            result.put("role", "DEPARTMENT_ADMIN");
+            result.put("personnelNo", "ADMIN001");
+            result.put("name", "Departman Yöneticisi");
+            result.put("department", "Bilgisayar Mühendisliği (BIL)");
+            result.put("permissions", "Can manage users only in BIL department");
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+    @GetMapping("/dev-config")
+    public ResponseEntity<Map<String, Object>> getDevConfig() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("developmentMode", developmentMode);
+        config.put("maxUsagePerDay", "Check QrCodeService for this value");
+        config.put("rateLimitingDisabled", developmentMode);
+        return ResponseEntity.ok(config);
+    }
+    
+    /**
      * Validates GPS coordinates are within valid ranges.
      * 
      * @param latitude Latitude value
@@ -498,11 +861,17 @@ public class MobileApiController {
     
     /**
      * Checks if the user has exceeded the rate limit.
+     * In development mode, rate limiting is disabled.
      * 
      * @param userId User ID
      * @return true if request is allowed, false if rate limit exceeded
      */
     private boolean checkRateLimit(Long userId) {
+        // Skip rate limiting in development mode
+        if (developmentMode) {
+            return true;
+        }
+        
         long currentTime = System.currentTimeMillis();
         
         rateLimitMap.compute(userId, (id, info) -> {

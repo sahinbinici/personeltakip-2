@@ -5,17 +5,39 @@ let currentSize = 20;
 let currentSearchTerm = '';
 let currentRoleFilter = '';
 let currentDepartmentFilter = '';
+let currentAttendanceFilter = '';
 let totalPages = 0;
 let selectedUserId = null;
 let allDepartments = [];
+let currentUserRole = null; // Store current user's role
 
 // Initialize users page
 document.addEventListener('DOMContentLoaded', function() {
+    loadCurrentUserRole();
     loadUserStats();
     loadDepartments();
     loadUsers();
     setupEventListeners();
 });
+
+// Load current user's role from JWT token
+function loadCurrentUserRole() {
+    try {
+        const token = localStorage.getItem('token');
+        if (token) {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            currentUserRole = payload.role;
+        }
+    } catch (error) {
+        console.error('Error parsing JWT token:', error);
+        currentUserRole = null;
+    }
+}
+
+// Check if current user can change roles
+function canChangeRoles() {
+    return currentUserRole === 'ADMIN' || currentUserRole === 'SUPER_ADMIN';
+}
 
 // Setup event listeners
 function setupEventListeners() {
@@ -33,6 +55,10 @@ function setupEventListeners() {
     // Department filter
     const departmentFilter = document.getElementById('departmentFilter');
     departmentFilter.addEventListener('change', handleDepartmentFilter);
+    
+    // Attendance filter
+    const attendanceFilter = document.getElementById('attendanceFilter');
+    attendanceFilter.addEventListener('change', handleAttendanceFilter);
     
     // Refresh button
     const refreshBtn = document.getElementById('refreshBtn');
@@ -68,6 +94,7 @@ async function loadUserStats() {
 function updateUserStats(stats) {
     document.getElementById('totalUsersCount').textContent = stats.totalUsers || 0;
     document.getElementById('normalUsersCount').textContent = stats.normalUsers || 0;
+    document.getElementById('departmentAdminUsersCount').textContent = stats.departmentAdminUsers || 0;
     document.getElementById('adminUsersCount').textContent = stats.adminUsers || 0;
     document.getElementById('superAdminUsersCount').textContent = stats.superAdminUsers || 0;
 }
@@ -149,6 +176,11 @@ function displayUsers(data) {
             `<span class="ip-assigned" title="${assignedIps}">${formatIpAddresses(assignedIps)}</span>` : 
             '<span class="ip-not-assigned">Atanmamış</span>';
         
+        const roleChangeButton = canChangeRoles() ? 
+            `<button class="btn btn-sm btn-warning" onclick="showRoleChangeModal(${user.id}, '${user.fullName}', '${user.role}')" title="Rol Değiştir">
+                <i class="fas fa-user-cog"></i>
+            </button>` : '';
+        
         return `
             <tr>
                 <td>${user.tcNo}</td>
@@ -169,9 +201,7 @@ function displayUsers(data) {
                         <button class="btn btn-sm btn-primary" onclick="showIpAssignmentModal(${user.id}, '${user.fullName}', '${assignedIps}')" title="IP Adresi Yönet">
                             <i class="fas fa-network-wired"></i>
                         </button>
-                        <button class="btn btn-sm btn-warning" onclick="showRoleChangeModal(${user.id}, '${user.fullName}', '${user.role}')" title="Rol Değiştir">
-                            <i class="fas fa-user-cog"></i>
-                        </button>
+                        ${roleChangeButton}
                     </div>
                 </td>
             </tr>
@@ -894,3 +924,119 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add IP tracking status indicator after a short delay to ensure DOM is ready
     setTimeout(addIpTrackingStatusIndicator, 500);
 });
+
+// Handle department filter change
+function handleDepartmentFilter() {
+    const departmentFilter = document.getElementById('departmentFilter');
+    currentDepartmentFilter = departmentFilter.value;
+    currentPage = 0;
+    loadUsers();
+}
+
+// Handle attendance filter change
+function handleAttendanceFilter() {
+    const attendanceFilter = document.getElementById('attendanceFilter');
+    currentAttendanceFilter = attendanceFilter.value;
+    currentPage = 0;
+    loadUsersWithAttendanceFilter();
+}
+
+// Load users with attendance filter
+async function loadUsersWithAttendanceFilter() {
+    if (!currentAttendanceFilter) {
+        loadUsers();
+        return;
+    }
+    
+    showLoading();
+    
+    try {
+        const params = new URLSearchParams({
+            attendanceStatus: currentAttendanceFilter,
+            page: currentPage,
+            size: currentSize
+        });
+        
+        const response = await makeAuthenticatedRequest(`/api/admin/users/attendance-filter?${params}`);
+        
+        if (!response) return;
+        
+        if (response.ok) {
+            const data = await response.json();
+            displayUsers(data);
+            updatePagination(data);
+        } else {
+            showError('Kullanıcılar yüklenirken hata oluştu');
+        }
+    } catch (error) {
+        console.error('Error loading users with attendance filter:', error);
+        showError('Kullanıcılar yüklenirken hata oluştu');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Load departments for filter dropdown
+async function loadDepartments() {
+    try {
+        const response = await makeAuthenticatedRequest('/api/admin/users/departments');
+        
+        if (!response) return;
+        
+        if (response.ok) {
+            const departments = await response.json();
+            populateDepartmentFilter(departments);
+        } else {
+            console.error('Failed to load departments');
+        }
+    } catch (error) {
+        console.error('Error loading departments:', error);
+    }
+}
+
+// Populate department filter dropdown
+function populateDepartmentFilter(departments) {
+    const departmentFilter = document.getElementById('departmentFilter');
+    
+    // Clear existing options except the first one
+    while (departmentFilter.children.length > 1) {
+        departmentFilter.removeChild(departmentFilter.lastChild);
+    }
+    
+    // Update the first option text based on available departments
+    const firstOption = departmentFilter.firstElementChild;
+    if (canChangeRoles()) { // ADMIN and SUPER_ADMIN can see all departments
+        firstOption.textContent = 'Tüm Departmanlar';
+    } else {
+        // For department admin
+        if (departments.length === 1) {
+            firstOption.textContent = departments[0].name;
+        } else if (departments.length > 1) {
+            firstOption.textContent = 'Tüm Departmanlar';
+        } else {
+            firstOption.textContent = 'Departman Yok';
+        }
+    }
+    
+    // Add department options - only if there are multiple departments
+    if (departments.length > 1 || canChangeRoles()) {
+        departments.forEach(dept => {
+            const option = document.createElement('option');
+            option.value = dept.code;
+            option.textContent = `${dept.name} (${dept.userCount})`;
+            departmentFilter.appendChild(option);
+        });
+    }
+    
+    allDepartments = departments;
+}
+
+// Update loadUsers function to handle attendance filter
+const originalLoadUsers = loadUsers;
+loadUsers = function() {
+    if (currentAttendanceFilter) {
+        loadUsersWithAttendanceFilter();
+    } else {
+        originalLoadUsers();
+    }
+};
