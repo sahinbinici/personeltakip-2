@@ -758,6 +758,114 @@ body {
     border-top: 1px solid var(--border-color);
 }
 
+/* Form Styles for Add User Modal */
+.form-row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.95rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
+}
+
+.form-group input::placeholder {
+    color: var(--text-light);
+}
+
+.form-info {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #0369a1;
+    font-size: 0.9rem;
+    margin-top: 1rem;
+}
+
+.form-info i {
+    color: #0ea5e9;
+}
+
+.form-divider {
+    border-top: 1px solid var(--border-color);
+    margin: 1.5rem 0 1rem;
+    padding-top: 1rem;
+    text-align: center;
+}
+
+.form-divider span {
+    background: white;
+    padding: 0 1rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.disabled-input {
+    background: #f1f5f9 !important;
+    color: var(--text-secondary) !important;
+    cursor: not-allowed;
+}
+
+.delete-user-info {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 6px;
+    margin: 1rem 0;
+}
+
+.warning-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #dc2626;
+    font-size: 0.9rem;
+    margin-top: 1rem;
+}
+
+.warning-box i {
+    color: #dc2626;
+}
+
 .user-detail-grid {
     display: grid;
     gap: 1rem;
@@ -1065,6 +1173,48 @@ body {
     background-color: rgba(239, 68, 68, 0.1);
     color: var(--danger-color);
     border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Excuse Badge */
+.excuse-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 11px;
+    background-color: rgba(255, 152, 0, 0.1);
+    color: #f57c00;
+    border: 1px solid rgba(255, 152, 0, 0.2);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.excuse-badge:hover {
+    background-color: rgba(255, 152, 0, 0.2);
+}
+
+.excuse-badge i {
+    font-size: 10px;
+}
+
+.excuse-badge .excuse-time {
+    display: block;
+    font-size: 9px;
+    color: #888;
+    margin-top: 2px;
+}
+
+.no-excuse {
+    color: var(--text-light);
+    font-size: 12px;
+}
+
+.excuse-cell {
+    max-width: 200px;
 }
 
 /* QR Code and GPS Cells */

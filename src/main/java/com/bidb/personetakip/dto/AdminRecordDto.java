@@ -100,6 +100,11 @@ public class AdminRecordDto {
     private Boolean ipMismatch;
     
     /**
+     * Excuse/reason text for the entry/exit (optional)
+     */
+    private String excuse;
+    
+    /**
      * Timestamp when the record was created
      */
     private LocalDateTime createdAt;

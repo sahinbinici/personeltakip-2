@@ -2,6 +2,8 @@ package com.bidb.personetakip.controller;
 
 import com.bidb.personetakip.dto.AdminUserDto;
 import com.bidb.personetakip.dto.DepartmentDto;
+import com.bidb.personetakip.dto.ManualUserCreateDto;
+import com.bidb.personetakip.dto.UserUpdateDto;
 import com.bidb.personetakip.security.JwtAuthenticationFilter;
 import com.bidb.personetakip.service.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -409,5 +411,96 @@ public class AdminUserController {
      */
     private boolean isValidRole(String role) {
         return "NORMAL_USER".equals(role) || "DEPARTMENT_ADMIN".equals(role) || "ADMIN".equals(role) || "SUPER_ADMIN".equals(role);
+    }
+    
+    /**
+     * Create a new user manually.
+     * 
+     * @param createDto User creation data
+     * @param authentication Current admin authentication
+     * @return Created AdminUserDto
+     */
+    @Operation(
+        summary = "Create user manually",
+        description = "Creates a new user manually by admin. The user can then login with TC No and a default password."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "User created successfully"),
+        @ApiResponse(responseCode = "400", description = "Invalid data or user already exists"),
+        @ApiResponse(responseCode = "403", description = "Access denied")
+    })
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    @PostMapping("/create")
+    public ResponseEntity<?> createUserManually(
+            @RequestBody ManualUserCreateDto createDto,
+            Authentication authentication) {
+        
+        try {
+            Long adminUserId = (Long) authentication.getPrincipal();
+            AdminUserDto createdUser = adminUserService.createUserManually(createDto, adminUserId);
+            return ResponseEntity.ok(createdUser);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Kullanıcı oluşturulurken hata oluştu: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Update user information.
+     * 
+     * @param userId User ID to update
+     * @param updateDto Update data
+     * @param authentication Current admin authentication
+     * @return Updated AdminUserDto
+     */
+    @Operation(
+        summary = "Update user information",
+        description = "Updates user information including password reset capability."
+    )
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    @PutMapping("/{userId}/update")
+    public ResponseEntity<?> updateUser(
+            @PathVariable Long userId,
+            @RequestBody UserUpdateDto updateDto,
+            Authentication authentication) {
+        
+        try {
+            Long adminUserId = (Long) authentication.getPrincipal();
+            AdminUserDto updatedUser = adminUserService.updateUser(userId, updateDto, adminUserId);
+            return ResponseEntity.ok(updatedUser);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Kullanıcı güncellenirken hata oluştu: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Delete user.
+     * 
+     * @param userId User ID to delete
+     * @param authentication Current admin authentication
+     * @return Success message
+     */
+    @Operation(
+        summary = "Delete user",
+        description = "Deletes a user from the system. Cannot delete yourself or SUPER_ADMIN users."
+    )
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    @DeleteMapping("/{userId}")
+    public ResponseEntity<?> deleteUser(
+            @PathVariable Long userId,
+            Authentication authentication) {
+        
+        try {
+            Long adminUserId = (Long) authentication.getPrincipal();
+            adminUserService.deleteUser(userId, adminUserId);
+            return ResponseEntity.ok(Map.of("message", "Kullanıcı başarıyla silindi"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Kullanıcı silinirken hata oluştu: " + e.getMessage()));
+        }
     }
 }

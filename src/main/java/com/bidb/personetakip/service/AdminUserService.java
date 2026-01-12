@@ -2,6 +2,8 @@ package com.bidb.personetakip.service;
 
 import com.bidb.personetakip.dto.AdminUserDto;
 import com.bidb.personetakip.dto.DepartmentDto;
+import com.bidb.personetakip.dto.ManualUserCreateDto;
+import com.bidb.personetakip.dto.UserUpdateDto;
 import com.bidb.personetakip.exception.IpAssignmentException;
 import com.bidb.personetakip.model.AdminAuditLog;
 import com.bidb.personetakip.model.User;
@@ -14,6 +16,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +49,9 @@ public class AdminUserService {
     
     @Autowired
     private IpPrivacyService ipPrivacyService;
+    
+    @Autowired
+    private PasswordEncoder passwordEncoder;
     
     @Autowired
     private com.bidb.personetakip.repository.DepartmentPermissionRepository departmentPermissionRepository;
@@ -500,5 +506,213 @@ public class AdminUserService {
         private long adminUsers;
         private long superAdminUsers;
         private long totalUsers;
+    }
+    
+    /**
+     * Create a new user manually by admin.
+     * The user will be created with a default password (TC No's last 6 digits).
+     * 
+     * @param createDto User creation data
+     * @param adminUserId ID of admin performing the action
+     * @return Created AdminUserDto
+     * @throws IllegalArgumentException if validation fails or user already exists
+     */
+    @Transactional
+    public AdminUserDto createUserManually(ManualUserCreateDto createDto, Long adminUserId) {
+        // Validate TC No
+        if (createDto.getTcNo() == null || !createDto.getTcNo().matches("\\d{11}")) {
+            throw new IllegalArgumentException("TC Kimlik No 11 haneli olmalıdır");
+        }
+        
+        // Check if user already exists
+        if (userRepository.findByTcNo(createDto.getTcNo()).isPresent()) {
+            throw new IllegalArgumentException("Bu TC Kimlik No ile kayıtlı kullanıcı zaten mevcut");
+        }
+        
+        // Check if personnel number already exists
+        if (userRepository.findByPersonnelNo(createDto.getPersonnelNo()).isPresent()) {
+            throw new IllegalArgumentException("Bu Sicil No ile kayıtlı kullanıcı zaten mevcut");
+        }
+        
+        // Create default password or use provided password
+        String password = createDto.getPassword();
+        if (password == null || password.trim().isEmpty()) {
+            // Default: last 6 digits of TC No
+            password = createDto.getTcNo().substring(5);
+        }
+        String passwordHash = passwordEncoder.encode(password);
+        
+        // Determine role
+        UserRole role = UserRole.NORMAL_USER;
+        if (createDto.getRole() != null && !createDto.getRole().isEmpty()) {
+            try {
+                role = UserRole.valueOf(createDto.getRole());
+            } catch (IllegalArgumentException e) {
+                role = UserRole.NORMAL_USER;
+            }
+        }
+        
+        // Create user
+        User user = User.builder()
+                .tcNo(createDto.getTcNo())
+                .personnelNo(createDto.getPersonnelNo())
+                .firstName(createDto.getFirstName())
+                .lastName(createDto.getLastName())
+                .mobilePhone(createDto.getMobilePhone())
+                .departmentCode(createDto.getDepartmentCode())
+                .departmentName(createDto.getDepartmentName())
+                .titleCode(createDto.getTitleCode())
+                .passwordHash(passwordHash)
+                .role(role)
+                .build();
+        
+        User savedUser = userRepository.save(user);
+        
+        // Create audit log
+        AdminAuditLog auditLog = AdminAuditLog.builder()
+                .adminUserId(adminUserId)
+                .action("MANUAL_USER_CREATE")
+                .targetUserId(savedUser.getId())
+                .details(String.format("{\"tcNo\":\"%s\",\"personnelNo\":\"%s\",\"fullName\":\"%s %s\"}", 
+                        createDto.getTcNo(), createDto.getPersonnelNo(), 
+                        createDto.getFirstName(), createDto.getLastName()))
+                .timestamp(java.time.LocalDateTime.now())
+                .build();
+        adminAuditLogRepository.save(auditLog);
+        
+        logger.info("Manual user created: {} by admin {}", savedUser.getTcNo(), adminUserId);
+        
+        return convertToAdminUserDto(savedUser);
+    }
+    
+    /**
+     * Update user information by admin.
+     * 
+     * @param userId User ID to update
+     * @param updateDto Update data
+     * @param adminUserId ID of admin performing the action
+     * @return Updated AdminUserDto
+     * @throws IllegalArgumentException if validation fails
+     */
+    @Transactional
+    public AdminUserDto updateUser(Long userId, UserUpdateDto updateDto, Long adminUserId) {
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("Kullanıcı bulunamadı");
+        }
+        
+        User user = userOpt.get();
+        StringBuilder changes = new StringBuilder();
+        
+        // Update fields if provided
+        if (updateDto.getPersonnelNo() != null && !updateDto.getPersonnelNo().isEmpty()) {
+            // Check if personnel number is already used by another user
+            Optional<User> existingUser = userRepository.findByPersonnelNo(updateDto.getPersonnelNo());
+            if (existingUser.isPresent() && !existingUser.get().getId().equals(userId)) {
+                throw new IllegalArgumentException("Bu Sicil No başka bir kullanıcı tarafından kullanılıyor");
+            }
+            changes.append("personnelNo: ").append(user.getPersonnelNo()).append(" -> ").append(updateDto.getPersonnelNo()).append("; ");
+            user.setPersonnelNo(updateDto.getPersonnelNo());
+        }
+        
+        if (updateDto.getFirstName() != null && !updateDto.getFirstName().isEmpty()) {
+            changes.append("firstName: ").append(user.getFirstName()).append(" -> ").append(updateDto.getFirstName()).append("; ");
+            user.setFirstName(updateDto.getFirstName());
+        }
+        
+        if (updateDto.getLastName() != null && !updateDto.getLastName().isEmpty()) {
+            changes.append("lastName: ").append(user.getLastName()).append(" -> ").append(updateDto.getLastName()).append("; ");
+            user.setLastName(updateDto.getLastName());
+        }
+        
+        if (updateDto.getMobilePhone() != null && !updateDto.getMobilePhone().isEmpty()) {
+            changes.append("mobilePhone: ").append(user.getMobilePhone()).append(" -> ").append(updateDto.getMobilePhone()).append("; ");
+            user.setMobilePhone(updateDto.getMobilePhone());
+        }
+        
+        if (updateDto.getDepartmentCode() != null) {
+            changes.append("departmentCode: ").append(user.getDepartmentCode()).append(" -> ").append(updateDto.getDepartmentCode()).append("; ");
+            user.setDepartmentCode(updateDto.getDepartmentCode().isEmpty() ? null : updateDto.getDepartmentCode());
+        }
+        
+        if (updateDto.getDepartmentName() != null) {
+            changes.append("departmentName: ").append(user.getDepartmentName()).append(" -> ").append(updateDto.getDepartmentName()).append("; ");
+            user.setDepartmentName(updateDto.getDepartmentName().isEmpty() ? null : updateDto.getDepartmentName());
+        }
+        
+        if (updateDto.getTitleCode() != null) {
+            user.setTitleCode(updateDto.getTitleCode().isEmpty() ? null : updateDto.getTitleCode());
+        }
+        
+        // Update password if provided
+        if (updateDto.getNewPassword() != null && !updateDto.getNewPassword().isEmpty()) {
+            if (updateDto.getNewPassword().length() < 6) {
+                throw new IllegalArgumentException("Şifre en az 6 karakter olmalıdır");
+            }
+            user.setPasswordHash(passwordEncoder.encode(updateDto.getNewPassword()));
+            changes.append("password: updated; ");
+        }
+        
+        user.setUpdatedAt(LocalDateTime.now());
+        User updatedUser = userRepository.save(user);
+        
+        // Create audit log
+        AdminAuditLog auditLog = AdminAuditLog.builder()
+                .adminUserId(adminUserId)
+                .action("USER_UPDATE")
+                .targetUserId(userId)
+                .details(changes.toString())
+                .timestamp(LocalDateTime.now())
+                .build();
+        adminAuditLogRepository.save(auditLog);
+        
+        logger.info("User {} updated by admin {}", userId, adminUserId);
+        
+        return convertToAdminUserDto(updatedUser);
+    }
+    
+    /**
+     * Delete user by admin.
+     * 
+     * @param userId User ID to delete
+     * @param adminUserId ID of admin performing the action
+     * @throws IllegalArgumentException if user not found or cannot be deleted
+     */
+    @Transactional
+    public void deleteUser(Long userId, Long adminUserId) {
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("Kullanıcı bulunamadı");
+        }
+        
+        User user = userOpt.get();
+        
+        // Prevent deleting yourself
+        if (userId.equals(adminUserId)) {
+            throw new IllegalArgumentException("Kendinizi silemezsiniz");
+        }
+        
+        // Prevent deleting SUPER_ADMIN users (only another SUPER_ADMIN can do this)
+        if (user.getRole() == UserRole.SUPER_ADMIN) {
+            throw new IllegalArgumentException("Süper yönetici kullanıcıları silinemez");
+        }
+        
+        String userInfo = String.format("{\"tcNo\":\"%s\",\"personnelNo\":\"%s\",\"fullName\":\"%s %s\"}", 
+                user.getTcNo(), user.getPersonnelNo(), user.getFirstName(), user.getLastName());
+        
+        // Delete user
+        userRepository.delete(user);
+        
+        // Create audit log
+        AdminAuditLog auditLog = AdminAuditLog.builder()
+                .adminUserId(adminUserId)
+                .action("USER_DELETE")
+                .targetUserId(userId)
+                .details(userInfo)
+                .timestamp(LocalDateTime.now())
+                .build();
+        adminAuditLogRepository.save(auditLog);
+        
+        logger.info("User {} deleted by admin {}", userId, adminUserId);
     }
 }

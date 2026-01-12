@@ -32,6 +32,18 @@ public interface EntryExitService {
     );
     
     /**
+     * Records entry/exit with excuse (no QR code required)
+     * GPS coordinates are optional
+     */
+    EntryExitRecordDto recordEntryExitWithExcuse(
+        Long userId,
+        String excuse,
+        EntryExitType type,
+        LocalDateTime timestamp,
+        HttpServletRequest request
+    );
+    
+    /**
      * Determines if next usage is entry or exit based on QR code usage count
      */
     EntryExitType determineEntryExitType(String qrCodeValue);

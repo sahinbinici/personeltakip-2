@@ -57,7 +57,7 @@ public interface ExternalPersonnelRepository extends JpaRepository<ExternalPerso
                    "LEFT JOIN unvkod u ON p.unvkod = u.unvkod " +
                    "LEFT JOIN brkodu b ON p.brkodu = b.BRKODU " +
                    "LEFT JOIN telefo t ON p.esicno = t.esicno " +
-                   "WHERE p.tckiml = :tckiml AND p.psicno = :psicno " +
+                   "WHERE p.tckiml = :tckiml AND p.psicno = :psicno AND t.teltur='GSM'" +
                    "LIMIT 1",
            nativeQuery = true)
     Optional<ExternalPersonnelFullDto> findCompletePersonnelData(
@@ -79,7 +79,7 @@ public interface ExternalPersonnelRepository extends JpaRepository<ExternalPerso
                    "LEFT JOIN unvkod u ON p.unvkod = u.unvkod " +
                    "LEFT JOIN brkodu b ON p.brkodu = b.BRKODU " +
                    "LEFT JOIN telefo t ON p.esicno = t.esicno " +
-                   "WHERE p.tckiml = :tckiml " +
+                   "WHERE p.tckiml = :tckiml AND t.teltur='GSM'" +
                    "LIMIT 1",
            nativeQuery = true)
     Optional<ExternalPersonnelFullDto> findCompletePersonnelDataByTcNo(@Param("tckiml") String tckiml);

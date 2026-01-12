@@ -12,7 +12,7 @@
         <!-- Navigation Sidebar -->
         <nav class="admin-sidebar">
             <div class="sidebar-header">
-                <img src="/images/gaziantep-university-logo.svg" alt="Gaziantep Üniversitesi" class="sidebar-logo">
+                <img src="/images/gaun-logo.png" alt="Gaziantep Üniversitesi" class="sidebar-logo">
                 <h2>Gaziantep Üniversitesi</h2>
                 <p class="sidebar-subtitle">Personel Takip Sistemi</p>
             </div>
@@ -33,6 +33,12 @@
                     <a href="/admin/records">
                         <i class="fas fa-clipboard-list"></i>
                         <span>Giriş/Çıkış Kayıtları</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/attendance-reports">
+                        <i class="fas fa-chart-bar"></i>
+                        <span>Raporlama</span>
                     </a>
                 </li>
                 <li id="departmentPermissionsLink" style="display: none;">
@@ -113,6 +119,11 @@
                     <button id="refreshBtn" class="refresh-btn">
                         <i class="fas fa-sync-alt"></i>
                         Yenile
+                    </button>
+                    
+                    <button id="addUserBtn" class="btn btn-primary" onclick="showAddUserModal()" style="margin-left: 10px;">
+                        <i class="fas fa-user-plus"></i>
+                        Kullanıcı Ekle
                     </button>
                 </div>
             </section>
@@ -331,6 +342,202 @@
                 </button>
                 <button class="btn btn-primary" onclick="confirmIpAssignment()">
                     <i class="fas fa-save"></i> Kaydet
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div id="addUserModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-plus"></i> Manuel Kullanıcı Ekle</h3>
+                <button class="modal-close" onclick="closeAddUserModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="addUserForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="newUserTcNo">TC Kimlik No *</label>
+                            <input type="text" id="newUserTcNo" maxlength="11" pattern="\d{11}" required 
+                                   placeholder="11 haneli TC Kimlik No">
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserPersonnelNo">Sicil No *</label>
+                            <input type="text" id="newUserPersonnelNo" maxlength="20" required 
+                                   placeholder="Sicil numarası">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="newUserFirstName">Ad *</label>
+                            <input type="text" id="newUserFirstName" maxlength="100" required 
+                                   placeholder="Kullanıcı adı">
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserLastName">Soyad *</label>
+                            <input type="text" id="newUserLastName" maxlength="100" required 
+                                   placeholder="Kullanıcı soyadı">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="newUserPhone">Telefon *</label>
+                            <input type="text" id="newUserPhone" maxlength="15" required 
+                                   placeholder="05XX XXX XX XX">
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserRole">Rol</label>
+                            <select id="newUserRole">
+                                <option value="NORMAL_USER">Normal Kullanıcı</option>
+                                <option value="DEPARTMENT_ADMIN">Departman Yöneticisi</option>
+                                <option value="ADMIN">Yönetici</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="newUserDepartmentCode">Departman Kodu</label>
+                            <input type="text" id="newUserDepartmentCode" maxlength="10" 
+                                   placeholder="Opsiyonel">
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserDepartmentName">Departman Adı</label>
+                            <input type="text" id="newUserDepartmentName" maxlength="200" 
+                                   placeholder="Opsiyonel">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="newUserPassword">Şifre</label>
+                            <input type="password" id="newUserPassword" minlength="6" maxlength="50" 
+                                   placeholder="En az 6 karakter (boş bırakılırsa TC'nin son 6 hanesi)">
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserPasswordConfirm">Şifre Tekrar</label>
+                            <input type="password" id="newUserPasswordConfirm" minlength="6" maxlength="50" 
+                                   placeholder="Şifreyi tekrar girin">
+                        </div>
+                    </div>
+                    <div class="form-info">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Şifre boş bırakılırsa varsayılan olarak TC Kimlik No'nun son 6 hanesi kullanılır</span>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeAddUserModal()">İptal</button>
+                <button class="btn btn-primary" onclick="createUser()">
+                    <i class="fas fa-save"></i> Kullanıcı Oluştur
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div id="editUserModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-edit"></i> Kullanıcı Düzenle</h3>
+                <button class="modal-close" onclick="closeEditUserModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="editUserForm">
+                    <input type="hidden" id="editUserId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>TC Kimlik No</label>
+                            <input type="text" id="editUserTcNo" disabled class="disabled-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="editUserPersonnelNo">Sicil No *</label>
+                            <input type="text" id="editUserPersonnelNo" maxlength="20" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editUserFirstName">Ad *</label>
+                            <input type="text" id="editUserFirstName" maxlength="100" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editUserLastName">Soyad *</label>
+                            <input type="text" id="editUserLastName" maxlength="100" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editUserPhone">Telefon *</label>
+                            <input type="text" id="editUserPhone" maxlength="15" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editUserDepartmentCode">Departman Kodu</label>
+                            <input type="text" id="editUserDepartmentCode" maxlength="10">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editUserDepartmentName">Departman Adı</label>
+                            <input type="text" id="editUserDepartmentName" maxlength="200">
+                        </div>
+                        <div class="form-group">
+                            <label for="editUserTitleCode">Ünvan Kodu</label>
+                            <input type="text" id="editUserTitleCode" maxlength="10">
+                        </div>
+                    </div>
+                    <div class="form-divider">
+                        <span>Şifre Değiştir (Opsiyonel)</span>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editUserNewPassword">Yeni Şifre</label>
+                            <input type="password" id="editUserNewPassword" minlength="6" maxlength="50" 
+                                   placeholder="Değiştirmek için doldurun">
+                        </div>
+                        <div class="form-group">
+                            <label for="editUserNewPasswordConfirm">Yeni Şifre Tekrar</label>
+                            <input type="password" id="editUserNewPasswordConfirm" minlength="6" maxlength="50" 
+                                   placeholder="Şifreyi tekrar girin">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditUserModal()">İptal</button>
+                <button class="btn btn-primary" onclick="updateUser()">
+                    <i class="fas fa-save"></i> Güncelle
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete User Confirmation Modal -->
+    <div id="deleteUserModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i> Kullanıcı Sil</h3>
+                <button class="modal-close" onclick="closeDeleteUserModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Bu kullanıcıyı silmek istediğinizden emin misiniz?</p>
+                <div class="delete-user-info">
+                    <strong>Kullanıcı:</strong> <span id="deleteUserName">--</span><br>
+                    <strong>TC No:</strong> <span id="deleteUserTcNo">--</span>
+                </div>
+                <div class="warning-box">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>Bu işlem geri alınamaz!</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDeleteUserModal()">İptal</button>
+                <button class="btn btn-danger" onclick="confirmDeleteUser()">
+                    <i class="fas fa-trash"></i> Sil
                 </button>
             </div>
         </div>

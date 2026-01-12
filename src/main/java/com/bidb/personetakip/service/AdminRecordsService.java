@@ -1261,6 +1261,7 @@ public class AdminRecordsService {
                 .ipAddress(record.getIpAddress())
                 .ipMismatch(ipMismatch)
                 .hasGpsCoordinates(record.hasGpsCoordinates())
+                .excuse(record.getExcuse())
                 .createdAt(record.getCreatedAt())
                 .build();
     }

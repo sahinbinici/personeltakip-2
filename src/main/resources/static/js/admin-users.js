@@ -23,10 +23,13 @@ document.addEventListener('DOMContentLoaded', function() {
 // Load current user's role from JWT token
 function loadCurrentUserRole() {
     try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('authToken');
         if (token) {
             const payload = JSON.parse(atob(token.split('.')[1]));
             currentUserRole = payload.role;
+            console.log('Current user role:', currentUserRole);
+        } else {
+            console.log('No token found in localStorage');
         }
     } catch (error) {
         console.error('Error parsing JWT token:', error);
@@ -36,6 +39,7 @@ function loadCurrentUserRole() {
 
 // Check if current user can change roles
 function canChangeRoles() {
+    console.log('canChangeRoles check - role:', currentUserRole);
     return currentUserRole === 'ADMIN' || currentUserRole === 'SUPER_ADMIN';
 }
 
@@ -181,6 +185,16 @@ function displayUsers(data) {
                 <i class="fas fa-user-cog"></i>
             </button>` : '';
         
+        const editButton = canChangeRoles() ? 
+            `<button class="btn btn-sm btn-secondary" onclick="showEditUserModal(${user.id})" title="Düzenle">
+                <i class="fas fa-edit"></i>
+            </button>` : '';
+        
+        const deleteButton = canChangeRoles() ? 
+            `<button class="btn btn-sm btn-danger" onclick="showDeleteUserModal(${user.id}, '${user.fullName}', '${user.tcNo}')" title="Sil">
+                <i class="fas fa-trash"></i>
+            </button>` : '';
+        
         return `
             <tr>
                 <td>${user.tcNo}</td>
@@ -202,6 +216,8 @@ function displayUsers(data) {
                             <i class="fas fa-network-wired"></i>
                         </button>
                         ${roleChangeButton}
+                        ${editButton}
+                        ${deleteButton}
                     </div>
                 </td>
             </tr>
@@ -539,6 +555,8 @@ function getRoleDisplayName(role) {
     switch (role) {
         case 'NORMAL_USER':
             return 'Normal Kullanıcı';
+        case 'DEPARTMENT_ADMIN':
+            return 'Departman Yöneticisi';
         case 'ADMIN':
             return 'Yönetici';
         case 'SUPER_ADMIN':
@@ -1040,3 +1058,269 @@ loadUsers = function() {
         originalLoadUsers();
     }
 };
+
+
+// Manual User Creation Functions
+
+// Show add user modal
+function showAddUserModal() {
+    // Check if user has permission
+    if (!canChangeRoles()) {
+        showError('Bu işlem için yetkiniz bulunmamaktadır');
+        return;
+    }
+    
+    // Clear form
+    document.getElementById('addUserForm').reset();
+    document.getElementById('addUserModal').style.display = 'flex';
+}
+
+// Close add user modal
+function closeAddUserModal() {
+    document.getElementById('addUserModal').style.display = 'none';
+}
+
+// Create user
+async function createUser() {
+    const tcNo = document.getElementById('newUserTcNo').value.trim();
+    const personnelNo = document.getElementById('newUserPersonnelNo').value.trim();
+    const firstName = document.getElementById('newUserFirstName').value.trim();
+    const lastName = document.getElementById('newUserLastName').value.trim();
+    const mobilePhone = document.getElementById('newUserPhone').value.trim();
+    const role = document.getElementById('newUserRole').value;
+    const departmentCode = document.getElementById('newUserDepartmentCode').value.trim();
+    const departmentName = document.getElementById('newUserDepartmentName').value.trim();
+    const password = document.getElementById('newUserPassword').value;
+    const passwordConfirm = document.getElementById('newUserPasswordConfirm').value;
+    
+    // Validate required fields
+    if (!tcNo || !personnelNo || !firstName || !lastName || !mobilePhone) {
+        showError('Lütfen zorunlu alanları doldurun');
+        return;
+    }
+    
+    // Validate TC No format
+    if (!/^\d{11}$/.test(tcNo)) {
+        showError('TC Kimlik No 11 haneli olmalıdır');
+        return;
+    }
+    
+    // Validate password if provided
+    if (password && password !== passwordConfirm) {
+        showError('Şifreler eşleşmiyor');
+        return;
+    }
+    
+    if (password && password.length < 6) {
+        showError('Şifre en az 6 karakter olmalıdır');
+        return;
+    }
+    
+    try {
+        showLoading();
+        
+        const response = await makeAuthenticatedRequest('/api/admin/users/create', {
+            method: 'POST',
+            body: JSON.stringify({
+                tcNo: tcNo,
+                personnelNo: personnelNo,
+                firstName: firstName,
+                lastName: lastName,
+                mobilePhone: mobilePhone,
+                role: role,
+                departmentCode: departmentCode || null,
+                departmentName: departmentName || null,
+                password: password || null
+            })
+        });
+        
+        if (!response) return;
+        
+        if (response.ok) {
+            const user = await response.json();
+            const passwordMsg = password ? 'Belirlenen şifre ile' : `Varsayılan şifre: ${tcNo.substring(5)}`;
+            showSuccess(`Kullanıcı başarıyla oluşturuldu. ${passwordMsg}`);
+            closeAddUserModal();
+            loadUsers();
+            loadUserStats();
+        } else {
+            const error = await response.json();
+            showError(error.message || 'Kullanıcı oluşturulurken hata oluştu');
+        }
+    } catch (error) {
+        console.error('Error creating user:', error);
+        showError('Kullanıcı oluşturulurken hata oluştu');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Edit User Functions
+let editingUserId = null;
+
+// Show edit user modal
+async function showEditUserModal(userId) {
+    if (!canChangeRoles()) {
+        showError('Bu işlem için yetkiniz bulunmamaktadır');
+        return;
+    }
+    
+    try {
+        showLoading();
+        
+        const response = await makeAuthenticatedRequest(`/api/admin/users/${userId}`);
+        
+        if (!response) return;
+        
+        if (response.ok) {
+            const user = await response.json();
+            editingUserId = userId;
+            
+            // Fill form
+            document.getElementById('editUserId').value = userId;
+            document.getElementById('editUserTcNo').value = user.tcNo;
+            document.getElementById('editUserPersonnelNo').value = user.personnelNo;
+            document.getElementById('editUserFirstName').value = user.firstName;
+            document.getElementById('editUserLastName').value = user.lastName;
+            document.getElementById('editUserPhone').value = user.mobilePhone;
+            document.getElementById('editUserDepartmentCode').value = user.departmentCode || '';
+            document.getElementById('editUserDepartmentName').value = user.departmentName || '';
+            document.getElementById('editUserTitleCode').value = user.titleCode || '';
+            document.getElementById('editUserNewPassword').value = '';
+            document.getElementById('editUserNewPasswordConfirm').value = '';
+            
+            document.getElementById('editUserModal').style.display = 'flex';
+        } else {
+            showError('Kullanıcı bilgileri yüklenirken hata oluştu');
+        }
+    } catch (error) {
+        console.error('Error loading user:', error);
+        showError('Kullanıcı bilgileri yüklenirken hata oluştu');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Close edit user modal
+function closeEditUserModal() {
+    document.getElementById('editUserModal').style.display = 'none';
+    editingUserId = null;
+}
+
+// Update user
+async function updateUser() {
+    if (!editingUserId) return;
+    
+    const personnelNo = document.getElementById('editUserPersonnelNo').value.trim();
+    const firstName = document.getElementById('editUserFirstName').value.trim();
+    const lastName = document.getElementById('editUserLastName').value.trim();
+    const mobilePhone = document.getElementById('editUserPhone').value.trim();
+    const departmentCode = document.getElementById('editUserDepartmentCode').value.trim();
+    const departmentName = document.getElementById('editUserDepartmentName').value.trim();
+    const titleCode = document.getElementById('editUserTitleCode').value.trim();
+    const newPassword = document.getElementById('editUserNewPassword').value;
+    const newPasswordConfirm = document.getElementById('editUserNewPasswordConfirm').value;
+    
+    // Validate required fields
+    if (!personnelNo || !firstName || !lastName || !mobilePhone) {
+        showError('Lütfen zorunlu alanları doldurun');
+        return;
+    }
+    
+    // Validate password if provided
+    if (newPassword && newPassword !== newPasswordConfirm) {
+        showError('Şifreler eşleşmiyor');
+        return;
+    }
+    
+    if (newPassword && newPassword.length < 6) {
+        showError('Şifre en az 6 karakter olmalıdır');
+        return;
+    }
+    
+    try {
+        showLoading();
+        
+        const response = await makeAuthenticatedRequest(`/api/admin/users/${editingUserId}/update`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                personnelNo: personnelNo,
+                firstName: firstName,
+                lastName: lastName,
+                mobilePhone: mobilePhone,
+                departmentCode: departmentCode || null,
+                departmentName: departmentName || null,
+                titleCode: titleCode || null,
+                newPassword: newPassword || null
+            })
+        });
+        
+        if (!response) return;
+        
+        if (response.ok) {
+            showSuccess('Kullanıcı başarıyla güncellendi');
+            closeEditUserModal();
+            loadUsers();
+        } else {
+            const error = await response.json();
+            showError(error.message || 'Kullanıcı güncellenirken hata oluştu');
+        }
+    } catch (error) {
+        console.error('Error updating user:', error);
+        showError('Kullanıcı güncellenirken hata oluştu');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Delete User Functions
+let deletingUserId = null;
+
+// Show delete user modal
+function showDeleteUserModal(userId, userName, tcNo) {
+    if (!canChangeRoles()) {
+        showError('Bu işlem için yetkiniz bulunmamaktadır');
+        return;
+    }
+    
+    deletingUserId = userId;
+    document.getElementById('deleteUserName').textContent = userName;
+    document.getElementById('deleteUserTcNo').textContent = tcNo;
+    document.getElementById('deleteUserModal').style.display = 'flex';
+}
+
+// Close delete user modal
+function closeDeleteUserModal() {
+    document.getElementById('deleteUserModal').style.display = 'none';
+    deletingUserId = null;
+}
+
+// Confirm delete user
+async function confirmDeleteUser() {
+    if (!deletingUserId) return;
+    
+    try {
+        showLoading();
+        
+        const response = await makeAuthenticatedRequest(`/api/admin/users/${deletingUserId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response) return;
+        
+        if (response.ok) {
+            showSuccess('Kullanıcı başarıyla silindi');
+            closeDeleteUserModal();
+            loadUsers();
+            loadUserStats();
+        } else {
+            const error = await response.json();
+            showError(error.message || 'Kullanıcı silinirken hata oluştu');
+        }
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        showError('Kullanıcı silinirken hata oluştu');
+    } finally {
+        hideLoading();
+    }
+}

@@ -153,6 +153,56 @@ public class EntryExitServiceImpl implements EntryExitService {
         entryExitRecordRepository.deleteByUserId(userId);
     }
     
+    @Override
+    @Transactional
+    public EntryExitRecordDto recordEntryExitWithExcuse(
+            Long userId,
+            String excuse,
+            EntryExitType type,
+            LocalDateTime timestamp,
+            HttpServletRequest request) {
+        
+        // Determine entry/exit type based on current status if not provided
+        EntryExitType actualType = type;
+        if (actualType == null) {
+            UserStatusDto currentStatus = getCurrentUserStatus(userId);
+            actualType = currentStatus.isInside() ? EntryExitType.EXIT : EntryExitType.ENTRY;
+        }
+        
+        // Capture IP address gracefully
+        String ipAddress = null;
+        try {
+            if (ipTrackingConfig.isEnabled() && request != null) {
+                ipAddress = ipAddressService.extractClientIpAddress(request);
+            }
+        } catch (Exception e) {
+            // Graceful IP capture failure handling
+        }
+        
+        // Create entry/exit record with excuse (no QR code, no GPS)
+        EntryExitRecord record = new EntryExitRecord();
+        record.setUserId(userId);
+        record.setType(actualType);
+        record.setTimestamp(timestamp);
+        record.setLatitude(null); // No GPS for excuse-based records
+        record.setLongitude(null);
+        record.setQrCodeValue("EXCUSE-" + System.currentTimeMillis()); // Placeholder QR value
+        record.setIpAddress(ipAddress);
+        record.setExcuse(excuse);
+        
+        EntryExitRecord savedRecord = entryExitRecordRepository.save(record);
+        
+        return new EntryExitRecordDto(
+            savedRecord.getId(),
+            savedRecord.getUserId(),
+            savedRecord.getType(),
+            savedRecord.getTimestamp(),
+            savedRecord.getLatitude(),
+            savedRecord.getLongitude(),
+            savedRecord.getExcuse()
+        );
+    }
+    
     private void validateGpsCoordinates(Double latitude, Double longitude) {
         if (latitude == null || longitude == null) {
             throw new ValidationException("GPS coordinates are required");

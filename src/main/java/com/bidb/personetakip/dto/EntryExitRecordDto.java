@@ -9,5 +9,12 @@ public record EntryExitRecordDto(
     EntryExitType type,
     LocalDateTime timestamp,
     Double latitude,
-    Double longitude
-) {}
+    Double longitude,
+    String excuse
+) {
+    // Constructor without excuse for backward compatibility
+    public EntryExitRecordDto(Long id, Long userId, EntryExitType type, 
+                              LocalDateTime timestamp, Double latitude, Double longitude) {
+        this(id, userId, type, timestamp, latitude, longitude, null);
+    }
+}

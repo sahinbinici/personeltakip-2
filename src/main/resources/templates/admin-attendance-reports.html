@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="tr" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raporlama - Gaziantep Üniversitesi Personel Takip Sistemi</title>
+    <link rel="stylesheet" href="/css/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .report-filters {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .filter-group { display: flex; flex-direction: column; gap: 5px; }
+        .filter-group label { font-weight: 600; color: #333; font-size: 14px; }
+        .filter-group select, .filter-group input {
+            padding: 10px 15px; border: 1px solid #ddd; border-radius: 6px;
+            font-size: 14px; min-width: 200px;
+        }
+        .report-stats {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px; margin-bottom: 20px;
+        }
+        .stat-box {
+            background: white; padding: 20px; border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;
+        }
+        .stat-box h3 { font-size: 32px; margin: 0; color: #1a5f7a; }
+        .stat-box p { margin: 5px 0 0; color: #666; font-size: 14px; }
+        .stat-box.warning h3 { color: #f39c12; }
+        .stat-box.danger h3 { color: #e74c3c; }
+        .stat-box.success h3 { color: #27ae60; }
+        .report-tabs {
+            display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
+        }
+        .report-tab {
+            padding: 12px 24px; background: white; border: 2px solid #ddd;
+            border-radius: 8px; cursor: pointer; font-weight: 600;
+            transition: all 0.2s;
+        }
+        .report-tab:hover { border-color: #1a5f7a; }
+        .report-tab.active { background: #1a5f7a; color: white; border-color: #1a5f7a; }
+        .report-table-container {
+            background: white; border-radius: 8px; overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .report-table { width: 100%; border-collapse: collapse; }
+        .report-table th, .report-table td {
+            padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee;
+        }
+        .report-table th { background: #f8f9fa; font-weight: 600; color: #333; }
+        .report-table tr:hover { background: #f8f9fa; }
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .badge-warning { background: #fff3cd; color: #856404; }
+        .badge-danger { background: #f8d7da; color: #721c24; }
+        .badge-success { background: #d4edda; color: #155724; }
+        .export-btn {
+            padding: 10px 20px; background: #27ae60; color: white;
+            border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
+        }
+        .export-btn:hover { background: #219a52; }
+        .no-data { text-align: center; padding: 40px; color: #666; }
+        .time-settings {
+            display: flex; gap: 15px; align-items: center;
+            padding: 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px;
+        }
+        .time-settings label { font-weight: 600; }
+        .time-settings input[type="time"] { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <nav class="admin-sidebar">
+            <div class="sidebar-header">
+                <img src="/images/gaun-logo.png" alt="Gaziantep Üniversitesi" class="sidebar-logo">
+                <h2>Gaziantep Üniversitesi</h2>
+                <p class="sidebar-subtitle">Personel Takip Sistemi</p>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="/admin/dashboard"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></a></li>
+                <li><a href="/admin/users"><i class="fas fa-users"></i><span>Kullanıcı Yönetimi</span></a></li>
+                <li><a href="/admin/records"><i class="fas fa-clipboard-list"></i><span>Giriş/Çıkış Kayıtları</span></a></li>
+                <li class="active"><a href="/admin/attendance-reports"><i class="fas fa-chart-bar"></i><span>Raporlama</span></a></li>
+                <li id="departmentPermissionsLink" style="display: none;">
+                    <a href="/admin/department-permissions"><i class="fas fa-sitemap"></i><span>Departman Yetkileri</span></a>
+                </li>
+                <li class="sidebar-divider"></li>
+                <li><a href="/qrcode" class="sidebar-link-secondary"><i class="fas fa-qrcode"></i><span>QR Kod Sayfası</span></a></li>
+                <li><a href="#" onclick="logout()" class="sidebar-link-danger"><i class="fas fa-sign-out-alt"></i><span>Çıkış Yap</span></a></li>
+            </ul>
+        </nav>
+        <main class="admin-main">
+            <header class="admin-header">
+                <div class="header-left">
+                    <h1><i class="fas fa-chart-bar"></i> Raporlama</h1>
+                    <p class="header-subtitle">Birim bazında personel devam durumu raporları</p>
+                </div>
+                <div class="header-right">
+                    <button class="export-btn" onclick="exportReport()"><i class="fas fa-download"></i> CSV İndir</button>
+                </div>
+            </header>
+
+            <!-- Filters -->
+            <div class="report-filters">
+                <div class="filter-group">
+                    <label>Dönem</label>
+                    <select id="periodSelect" onchange="loadReport()">
+                        <option value="WEEK">Son 1 Hafta</option>
+                        <option value="MONTH" selected>Son 1 Ay</option>
+                        <option value="YEAR">Son 1 Yıl</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Departman</label>
+                    <select id="departmentSelect" onchange="loadReport()">
+                        <option value="">Tüm Departmanlar</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Geç Giriş Saati</label>
+                    <input type="time" id="lateEntryTime" value="09:00" onchange="loadReport()">
+                </div>
+                <div class="filter-group">
+                    <label>Erken Çıkış Saati</label>
+                    <input type="time" id="earlyExitTime" value="17:00" onchange="loadReport()">
+                </div>
+                <div class="filter-group" style="justify-content: flex-end;">
+                    <button class="btn btn-primary" onclick="loadReport()">
+                        <i class="fas fa-sync-alt"></i> Yenile
+                    </button>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="report-stats">
+                <div class="stat-box">
+                    <h3 id="totalPersonnel">0</h3>
+                    <p>Toplam Personel</p>
+                </div>
+                <div class="stat-box success">
+                    <h3 id="withEntries">0</h3>
+                    <p>Giriş/Çıkış Yapan</p>
+                </div>
+                <div class="stat-box danger">
+                    <h3 id="withoutEntries">0</h3>
+                    <p>Giriş/Çıkış Yapmayan</p>
+                </div>
+                <div class="stat-box warning">
+                    <h3 id="lateEntries">0</h3>
+                    <p>Geç Giriş Yapan</p>
+                </div>
+                <div class="stat-box warning">
+                    <h3 id="earlyExits">0</h3>
+                    <p>Erken Çıkış Yapan</p>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="report-tabs">
+                <button class="report-tab active" data-tab="withEntries" onclick="showTab('withEntries')">
+                    <i class="fas fa-check-circle"></i> Giriş/Çıkış Yapanlar
+                </button>
+                <button class="report-tab" data-tab="withoutEntries" onclick="showTab('withoutEntries')">
+                    <i class="fas fa-times-circle"></i> Giriş/Çıkış Yapmayanlar
+                </button>
+                <button class="report-tab" data-tab="lateEntries" onclick="showTab('lateEntries')">
+                    <i class="fas fa-clock"></i> Geç Girenler
+                </button>
+                <button class="report-tab" data-tab="earlyExits" onclick="showTab('earlyExits')">
+                    <i class="fas fa-running"></i> Erken Çıkanlar
+                </button>
+            </div>
+
+            <!-- Table -->
+            <div class="report-table-container">
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>TC Kimlik No</th>
+                            <th>Ad Soyad</th>
+                            <th>Sicil No</th>
+                            <th>Departman</th>
+                            <th>Giriş Sayısı</th>
+                            <th>Çıkış Sayısı</th>
+                            <th>Geç Giriş</th>
+                            <th>Erken Çıkış</th>
+                            <th>Son Giriş</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportTableBody">
+                        <tr><td colspan="9" class="no-data">Yükleniyor...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><p>Yükleniyor...</p></div>
+    </div>
+
+    <script src="/js/admin.js"></script>
+    <script src="/js/admin-attendance-reports.js"></script>
+</body>
+</html>

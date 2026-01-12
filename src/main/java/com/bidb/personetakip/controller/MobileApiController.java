@@ -8,8 +8,10 @@ import com.bidb.personetakip.dto.ExcuseResponseDto;
 import com.bidb.personetakip.dto.ExcuseTypeDto;
 import com.bidb.personetakip.dto.LoginRequest;
 import com.bidb.personetakip.dto.QrCodeValidationDto;
+import com.bidb.personetakip.dto.SimpleExcuseRequestDto;
 import com.bidb.personetakip.dto.UserStatusDto;
 import com.bidb.personetakip.model.EntryExitRecord;
+import com.bidb.personetakip.model.EntryExitType;
 import com.bidb.personetakip.model.User;
 import com.bidb.personetakip.model.UserRole;
 import com.bidb.personetakip.repository.EntryExitRecordRepository;
@@ -579,6 +581,112 @@ public class MobileApiController {
         Long userId = getAuthenticatedUserId();
         UserStatusDto status = entryExitService.getCurrentUserStatus(userId);
         return ResponseEntity.ok(status);
+    }
+    
+    /**
+     * Records entry/exit with excuse (no QR code required).
+     * POST /api/mobil/mazeret-kaydet
+     * 
+     * @param request Simple excuse request with excuse text
+     * @param httpRequest HTTP servlet request for IP address extraction
+     * @return EntryExitRecordDto containing recorded event data
+     */
+    @Operation(
+        summary = "Record entry/exit with excuse",
+        description = "Records personnel entry or exit event with an excuse text instead of QR code. GPS coordinates are not required.",
+        security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Entry/exit with excuse recorded successfully",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = EntryExitRecordDto.class),
+                examples = @ExampleObject(
+                    name = "Success Response",
+                    value = """
+                    {
+                        "id": 456,
+                        "userId": 123,
+                        "timestamp": "2024-12-16T08:30:00Z",
+                        "latitude": null,
+                        "longitude": null,
+                        "type": "ENTRY",
+                        "excuse": "Doktor randevusu nedeniyle geç kaldım"
+                    }
+                    """
+                )
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request data",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "Invalid Excuse",
+                    value = """
+                    {
+                        "message": "Mazeret metni 10-500 karakter arasında olmalıdır"
+                    }
+                    """
+                )
+            )
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required"
+        ),
+        @ApiResponse(
+            responseCode = "429",
+            description = "Rate limit exceeded"
+        )
+    })
+    @PostMapping("/mazeret-kaydet")
+    public ResponseEntity<?> recordEntryExitWithExcuse(
+            @Parameter(description = "Simple excuse request with excuse text", required = true)
+            @Valid @RequestBody SimpleExcuseRequestDto request,
+            HttpServletRequest httpRequest) {
+        Long userId = getAuthenticatedUserId();
+        
+        // Check rate limit
+        if (!checkRateLimit(userId)) {
+            return ResponseEntity.status(429)
+                .body(Map.of("message", "Too many requests. Please try again later."));
+        }
+        
+        // Validate excuse text
+        if (request.excuse() == null || request.excuse().trim().length() < 10) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("message", "Mazeret metni en az 10 karakter olmalıdır"));
+        }
+        
+        if (request.excuse().length() > 500) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("message", "Mazeret metni en fazla 500 karakter olabilir"));
+        }
+        
+        // Determine entry/exit type
+        EntryExitType type = null;
+        if (request.type() != null && !request.type().isEmpty()) {
+            try {
+                type = EntryExitType.valueOf(request.type().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Invalid type, will be determined automatically
+            }
+        }
+        
+        // Record entry/exit with excuse
+        EntryExitRecordDto record = entryExitService.recordEntryExitWithExcuse(
+            userId,
+            request.excuse().trim(),
+            type,
+            LocalDateTime.now(),
+            httpRequest
+        );
+        
+        return ResponseEntity.ok(record);
     }
     
     /**

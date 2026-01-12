@@ -85,6 +85,14 @@ public class EntryExitRecord {
     private String ipAddress;
     
     /**
+     * Excuse/reason text for the entry/exit (optional)
+     * Used when user submits an excuse instead of QR scan
+     */
+    @Column(name = "excuse", length = 500)
+    @Size(max = 500, message = "Excuse must not exceed 500 characters")
+    private String excuse;
+    
+    /**
      * Timestamp when the record was created in the database
      */
     @CreationTimestamp
@@ -97,6 +105,14 @@ public class EntryExitRecord {
      */
     public boolean hasGpsCoordinates() {
         return latitude != null && longitude != null;
+    }
+    
+    /**
+     * Check if this record has an excuse
+     * @return true if excuse is not null and not empty
+     */
+    public boolean hasExcuse() {
+        return excuse != null && !excuse.trim().isEmpty();
     }
     
     /**

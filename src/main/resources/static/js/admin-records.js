@@ -294,7 +294,7 @@ function displayRecords(data) {
     if (!data.content || data.content.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="10" class="no-data">
+                <td colspan="11" class="no-data">
                     <div class="no-data-message">
                         <i class="fas fa-clipboard-list"></i>
                         <p>Kayıt bulunamadı</p>
@@ -308,14 +308,37 @@ function displayRecords(data) {
     
     const recordsHtml = data.content.map(record => {
         const timestamp = formatDateTime(record.timestamp);
-        const gpsInfo = record.hasGpsCoordinates ? 
+        
+        // Check if this is an excuse-only record (no real QR scan)
+        const isExcuseOnlyRecord = record.excuse && record.excuse.trim() !== '' && 
+                                   record.qrCodeValue && record.qrCodeValue.startsWith('EXCUSE-');
+        
+        const gpsInfo = isExcuseOnlyRecord ? '-' : (record.hasGpsCoordinates ? 
             `${record.latitude.toFixed(6)}, ${record.longitude.toFixed(6)}` : 
-            'GPS bilgisi yok';
+            'GPS bilgisi yok');
         
         const departmentName = record.userDepartmentName || record.userDepartmentCode || '--';
         
         // Format IP address with mismatch highlighting
-        const ipAddressHtml = formatIpAddressDisplay(record);
+        const ipAddressHtml = isExcuseOnlyRecord ? '-' : formatIpAddressDisplay(record);
+        
+        // Format excuse display with timestamp
+        let excuseHtml = '<span class="no-excuse">-</span>';
+        if (record.excuse) {
+            const excuseTime = formatDateTime(record.timestamp);
+            const shortExcuse = record.excuse.length > 30 ? record.excuse.substring(0, 30) + '...' : record.excuse;
+            excuseHtml = `<span class="excuse-badge" title="${record.excuse} (${excuseTime})">
+                <i class="fas fa-comment-alt"></i> ${shortExcuse}
+                <small class="excuse-time">${excuseTime}</small>
+            </span>`;
+        }
+        
+        // QR code display - hide for excuse-only records
+        const qrCodeHtml = isExcuseOnlyRecord ? '-' : record.qrCodeValue;
+        
+        // Type display - hide for excuse-only records
+        const typeHtml = isExcuseOnlyRecord ? '-' : 
+            `<span class="type-badge type-${record.type.toLowerCase()}">${record.typeDisplayName}</span>`;
         
         return `
             <tr ${record.ipMismatch ? 'class="ip-mismatch-row"' : ''}>
@@ -324,18 +347,17 @@ function displayRecords(data) {
                 <td>${record.userFullName || 'Bilinmeyen Kullanıcı'}</td>
                 <td>${record.userPersonnelNo || 'Bilinmeyen'}</td>
                 <td>${departmentName}</td>
-                <td>
-                    <span class="type-badge type-${record.type.toLowerCase()}">${record.typeDisplayName}</span>
-                </td>
+                <td>${typeHtml}</td>
+                <td class="excuse-cell">${excuseHtml}</td>
                 <td class="ip-address-cell">${ipAddressHtml}</td>
-                <td class="qr-code-cell">${record.qrCodeValue}</td>
+                <td class="qr-code-cell">${qrCodeHtml}</td>
                 <td class="gps-cell">${gpsInfo}</td>
                 <td>
                     <div class="action-buttons">
                         <button class="btn btn-sm btn-info" onclick="showRecordDetail(${record.id})" title="Detayları Görüntüle">
                             <i class="fas fa-eye"></i>
                         </button>
-                        ${record.hasGpsCoordinates ? `
+                        ${!isExcuseOnlyRecord && record.hasGpsCoordinates ? `
                             <button class="btn btn-sm btn-success" onclick="showLocationOnMap(${record.latitude}, ${record.longitude})" title="Haritada Göster">
                                 <i class="fas fa-map-marker-alt"></i>
                             </button>
