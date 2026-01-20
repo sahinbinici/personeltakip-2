@@ -33,10 +33,10 @@ public class SmsServiceImpl implements SmsService {
     @Value("${sms.gateway.url:https://api.vatansms.net/api/v1/otp}")
     private String smsGatewayUrl;
     
-    @Value("${sms.gateway.api-id:29d463733f56db81be9eb355}")
+    @Value("${sms.gateway.api-id:xxxxxxxxxxxxxxxx}")
     private String apiId;
     
-    @Value("${sms.gateway.api-key:79259ea325e14e8603ab7cf7}")
+    @Value("${sms.gateway.api-key:xxxxxxxxxxxxx}")
     private String apiKey;
     
     @Value("${sms.gateway.sender:G.ANTEP UNI}")
